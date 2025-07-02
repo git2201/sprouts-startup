@@ -175,6 +175,7 @@ function App() {
       
       // Save to database
       const { profile, error } = await updateUserProfile(user.id, profileData)
+      console.log('Profile upsert result:', profile, error)
       
       if (error) {
         console.error('Error saving profile:', error)
