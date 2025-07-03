@@ -6,20 +6,32 @@ import Header from './components/Header'
 import Login from './components/Login'
 import Signup from './components/Signup'
 import Dashboard from './components/Dashboard'
-import { onAuthStateChange, getCurrentUser, signOut } from './library/auth.js'
+import { onAuthStateChange, getCurrentUser, signOut, signUp } from './library/auth.js'
 import { getUserProfile, updateUserProfile } from './library/profiles.js'
 import { createUserFromOnboarding } from './utils/matching.js'
+import { testProfilesTable } from './library/supabase.js'
 
 function App() {
   const [authState, setAuthState] = useState('welcome') // 'welcome', 'login', 'signup', 'onboarding', 'dashboard'
   const [user, setUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [onboardingData, setOnboardingData] = useState(null) // NEW: store onboarding answers
+  const [editing, setEditing] = useState(false);
+  const [editFields, setEditFields] = useState({
+    availability: userProfile?.availability || '',
+    communication: userProfile?.communication || '',
+    roles: userProfile?.roles || [],
+    industries: userProfile?.industries || [],
+  });
 
   // Move useLocation to the top, before any returns
   const location = useLocation();
 
   useEffect(() => {
+    // Test profiles table on app load
+    testProfilesTable()
+    
     // Listen to auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
       if (session?.user) {
@@ -60,188 +72,95 @@ function App() {
     
     checkUser()
 
+    console.log('After checkUser, user:', user, 'userProfile:', userProfile, 'authState:', authState);
+
     return () => subscription?.unsubscribe()
   }, [])
 
-  const handleLogin = (userData) => {
+  const handleLogin = async (userData) => {
     console.log('Login successful:', userData) // Debug log
     setUser(userData)
-    if (userData.hasProfile) {
+    
+    // Check if user has a profile in the database
+    try {
+      const { profile, error } = await getUserProfile(userData.id)
+      if (!error && profile) {
+        console.log('User has profile:', profile)
+        setUserProfile(profile)
+        setUser(prev => ({ ...prev, hasProfile: true }))
       setAuthState('dashboard')
     } else {
+        console.log('User has no profile, going to onboarding')
+        setAuthState('onboarding')
+      }
+    } catch (error) {
+      console.error('Error checking user profile:', error)
       setAuthState('onboarding')
     }
   }
 
-  const handleSignup = (userData) => {
-    console.log('Signup successful:', userData) // Debug log
-    setUser(userData)
-    setAuthState('onboarding')
+  const handleOnboardingComplete = (data) => {
+    setOnboardingData(data)
+    setAuthState('signup')
   }
 
-  const handleOnboardingComplete = async (onboardingData) => {
-    console.log('🌱 Onboarding completed with data:', onboardingData)
-    
+  const handleSignup = async (signupData) => {
+    // signupData: { name, email, phone, password }
+    // onboardingData: from previous step
+    setLoading(true)
     try {
-      // Helper function to map communication style
-      const mapCommunication = (comm) => {
-        if (comm === 'Async-first') return 'async'
-        if (comm === 'Weekly syncs/check-ins') return 'weekly_sync'
-        if (comm === 'Daily check-ins and active messaging') return 'daily_checkin'
-        if (comm === 'Depends on the team') return 'depends'
-        return 'depends'
-      }
-      
-      // Helper function to map availability
-      const mapAvailability = (avail) => {
-        if (avail === 'Nights/weekends only') return 'nights_weekends'
-        if (avail === '10–20 hrs/week') return '10_20'
-        if (avail === '20–40 hrs/week') return '20_40'
-        if (avail === 'Full-time') return 'full_time'
-        if (avail === 'Depends on the match') return 'depends'
-        return 'depends'
-      }
-      
-      // Helper function to map conflict style
-      const mapConflictStyle = (conflict) => {
-        if (conflict === 'I prefer to address it directly and resolve it quickly.') return 'direct'
-        if (conflict === 'I bring it up gently, usually after thinking it through.') return 'indirect'
-        if (conflict === 'I try to avoid confrontation and hope it resolves.') return 'avoidant'
-        if (conflict === 'I usually internalize it unless it becomes urgent.') return 'internalize'
-        return 'indirect'
-      }
-      
-      // Helper function to map flexibility
-      const mapFlexibility = (flex) => {
-        if (flex === 'Very rigid') return 'rigid'
-        if (flex === 'Slightly flexible') return 'slightly_flexible'
-        if (flex === 'Very flexible') return 'very_flexible'
-        return 'slightly_flexible'
-      }
-      
-      // Helper function to map chronotype
-      const mapChronotype = (chrono) => {
-        if (chrono === 'Early morning (5am–10am)') return 'morning'
-        if (chrono === 'Midday (11am–4pm)') return 'midday'
-        if (chrono === 'Evening/Night (5pm–2am)') return 'night'
-        if (chrono === 'Flexible throughout the day') return 'flexible'
-        return 'flexible'
-      }
-      
-      // Convert onboarding data to the format needed for the database
-      const profileData = {
-        name: user?.user_metadata?.name || user?.email?.split('@')[0] || 'Anonymous',
-        email: user?.email,
-        
-        // Personality traits (Big Five)
-        openness: onboardingData.openness || 3,
-        conscientiousness: onboardingData.conscientiousness || 3,
-        extraversion: onboardingData.extraversion || 3,
-        agreeableness: onboardingData.agreeableness || 3,
-        neuroticism: onboardingData.neuroticism || 3,
-        
-        // Work style and availability
-        availability: mapAvailability(onboardingData.availability),
-        availability_flexibility: mapFlexibility(onboardingData.availability_flexibility),
-        chronotype: mapChronotype(onboardingData.chronotype),
-        communication: mapCommunication(onboardingData.communication),
-        
-        // Conflict and team style
-        conflict_style: mapConflictStyle(onboardingData.conflict_style),
-        team_style: onboardingData.team_style || '',
-        cofounder_frustration: onboardingData.cofounder_frustration || '',
-        
-        // Motivation and values
-        motivations: onboardingData.motivations || [],
-        top_motivation: onboardingData.top_motivation || '',
-        
-        // Roles and skills
-        roles: onboardingData.roles || [],
-        preferred_role: onboardingData.preferred_role || '',
-        
-        // Legacy fields for backward compatibility
-        role: onboardingData.roles?.[0] || 'Not specified',
-        personality: getPersonalityLabel(onboardingData),
-        work_style: getWorkStyleLabel(onboardingData),
-        motivation: onboardingData.top_motivation || 'Not specified',
-        cofounder_preference: getCofounderPreference(onboardingData),
-        startup_stage: 'Building MVP', // Default for now
-        
-        // Metadata
-        avatar: '👤',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      
-      // Save to database
-      const { profile, error } = await updateUserProfile(user.id, profileData)
-      console.log('Profile upsert result:', profile, error)
-      
+      // Create user in Supabase Auth
+      const { user, error } = await signUp(signupData.email, signupData.password, {
+        name: signupData.name,
+        phone: signupData.phone
+      })
       if (error) {
-        console.error('Error saving profile:', error)
-        // Still set the profile locally so user can proceed
+        setLoading(false)
+        alert(error.message || error)
+        return
+      }
+      if (user) {
+        // Combine onboarding and signup data
+        const profileData = {
+          id: user.id,
+          name: signupData.name,
+          email: signupData.email,
+          phone: signupData.phone,
+          ...onboardingData,
+          updated_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        }
+        // Save to Supabase profiles table
+        const { error: profileError } = await updateUserProfile(user.id, profileData)
+        if (profileError) {
+          console.error('Profile save error:', profileError);
+          alert('Error saving profile: ' + (profileError.message || JSON.stringify(profileError)))
+        }
+        setUser(user)
         setUserProfile(profileData)
-        setUser(prev => ({ ...prev, hasProfile: true }))
-        setAuthState('dashboard')
-      } else {
-        console.log('🌱 Profile saved successfully:', profile)
-        setUserProfile(profile)
-        setUser(prev => ({ ...prev, hasProfile: true }))
         setAuthState('dashboard')
       }
-      
-    } catch (error) {
-      console.error('Error in onboarding completion:', error)
-      // Fallback: set basic profile data
-      const fallbackProfile = {
-        name: user?.user_metadata?.name || user?.email?.split('@')[0] || 'Anonymous',
-        email: user?.email,
-        role: 'Not specified',
-        personality: 'Not specified',
-        work_style: 'Not specified',
-        motivation: 'Not specified',
-        cofounder_preference: 'Not specified',
-        startup_stage: 'Not specified',
-        avatar: '👤'
-      }
-      setUserProfile(fallbackProfile)
-      setUser(prev => ({ ...prev, hasProfile: true }))
-      setAuthState('dashboard')
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setLoading(false)
     }
-    // Ensure loading is set to false after onboarding
-    setLoading(false)
-  }
-
-  // Helper functions to convert detailed data to simple labels
-  const getPersonalityLabel = (data) => {
-    if (data.extraversion >= 4) return 'Extrovert'
-    if (data.extraversion <= 2) return 'Introvert'
-    if (data.openness >= 4) return 'Creative'
-    if (data.conscientiousness >= 4) return 'Analytical'
-    return 'Balanced'
-  }
-
-  const getWorkStyleLabel = (data) => {
-    if (data.communication === 'Async-first') return 'Async'
-    if (data.communication === 'Daily check-ins and active messaging') return 'Real-time'
-    if (data.availability_flexibility === 'Very flexible') return 'Flexible'
-    return 'Structured'
-  }
-
-  const getCofounderPreference = (data) => {
-    if (data.roles?.includes('Technical')) return 'Tech Cofounder'
-    if (data.roles?.includes('Sales') || data.roles?.includes('Marketer')) return 'Business Cofounder'
-    if (data.roles?.includes('Designer/UX')) return 'Design Cofounder'
-    return 'Flexible'
   }
 
   const handleLogout = async () => {
-    await signOut()
-    setUser(null)
-    setUserProfile(null)
-    setAuthState('welcome')
+    console.log('Sign out button clicked');
+    const { error } = await signOut();
+    if (error) {
+      console.error('Sign out error:', error);
+    } else {
+      console.log('Signed out successfully');
+    }
+    setUser(null);
+    setUserProfile(null);
+    setAuthState('welcome');
   }
 
+  const switchToOnboarding = () => setAuthState('onboarding')
   const switchToSignup = () => setAuthState('signup')
   const switchToLogin = () => setAuthState('login')
 
@@ -250,12 +169,37 @@ function App() {
   console.log('Current user:', user)
   console.log('Current userProfile:', userProfile)
 
+  useEffect(() => {
+    if (user && !userProfile && !loading) {
+      setAuthState('onboarding');
+    }
+  }, [user, userProfile, loading]);
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    const { error } = await updateUserProfile(user.id, {
+      availability: editFields.availability,
+      communication: editFields.communication,
+      roles: editFields.roles,
+      industries: editFields.industries,
+    });
+    if (!error) {
+      setUserProfile(prev => ({
+        ...prev,
+        ...editFields,
+      }));
+      setEditing(false);
+    } else {
+      alert('Error updating profile: ' + (error.message || JSON.stringify(error)));
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 font-poppins">
         <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="text-4xl mb-4">🌱</div>
+        <div className="text-center">
+          <div className="text-4xl mb-4">🌱</div>
             <h2 className="text-2xl font-bold text-gray-900">Loading your matches...</h2>
             <p className="text-gray-600 mt-2">Finding the perfect cofounders for you</p>
           </div>
@@ -293,7 +237,7 @@ function App() {
                 <div className="space-y-4">
                   <button 
                     className="btn-primary w-full"
-                    onClick={switchToSignup}
+                    onClick={switchToOnboarding}
                   >
                     Get Started
                   </button>
@@ -309,9 +253,62 @@ function App() {
           </div>
         } />
         <Route path="/login" element={<Login onLogin={handleLogin} onSwitchToSignup={switchToSignup} />} />
-        <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={switchToLogin} />} />
+        <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={switchToLogin} onboardingData={onboardingData} />} />
         <Route path="/onboarding" element={<OnboardingFlow onComplete={handleOnboardingComplete} />} />
-        <Route path="/dashboard" element={<Dashboard user={user} userProfile={userProfile} onLogout={handleLogout} />} />
+        <Route path="/dashboard" element={
+          <Dashboard
+            user={user}
+            userProfile={userProfile}
+            onLogout={handleLogout}
+            editing={editing}
+            editFields={editFields}
+            setEditing={setEditing}
+            setEditFields={setEditFields}
+          >
+            {!editing ? (
+              <>
+                <button onClick={() => setEditing(true)} className="btn-primary">Edit Profile</button>
+              </>
+            ) : (
+              <form onSubmit={handleEditSubmit}>
+                <label>
+                  Availability:
+                  <input
+                    type="text"
+                    value={editFields.availability}
+                    onChange={e => setEditFields({ ...editFields, availability: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Communication:
+                  <input
+                    type="text"
+                    value={editFields.communication}
+                    onChange={e => setEditFields({ ...editFields, communication: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Roles:
+                  <input
+                    type="text"
+                    value={editFields.roles.join(', ')}
+                    onChange={e => setEditFields({ ...editFields, roles: e.target.value.split(',').map(r => r.trim()) })}
+                  />
+                </label>
+                <label>
+                  Industries:
+                  <input
+                    type="text"
+                    value={editFields.industries.join(', ')}
+                    onChange={e => setEditFields({ ...editFields, industries: e.target.value.split(',').map(i => i.trim()) })}
+                  />
+                </label>
+                <button type="submit" className="btn-primary">Save</button>
+                <button type="button" onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
+              </form>
+            )}
+          </Dashboard>
+        } />
       </Routes>
     </div>
   )

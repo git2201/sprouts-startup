@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { supabase } from "../library/supabase"
 
 const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formData }) => {
   const [selectedValue, setSelectedValue] = useState(formData[step.id] || (step.type === 'multi_select' ? [] : ''));

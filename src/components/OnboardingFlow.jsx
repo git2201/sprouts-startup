@@ -9,7 +9,9 @@ const OnboardingFlow = ({ onComplete }) => {
     workStyle: '',
     motivation: '',
     cofounderPreference: '',
-    startupStage: ''
+    startupStage: '',
+    age: '',
+    industries: [],
   })
 
   const onboardingQuestions = [
@@ -48,6 +50,30 @@ const OnboardingFlow = ({ onComplete }) => {
       type: 'scale',
       scaleMinLabel: 'Strongly Disagree',
       scaleMaxLabel: 'Strongly Agree',
+    },
+    // NEW: Age question
+    {
+      id: 'age',
+      prompt: 'How old are you?',
+      type: 'single_choice',
+      options: Array.from({length: 65}, (_, i) => (i + 16).toString()), // 16-80
+    },
+    // NEW: Industry question
+    {
+      id: 'industries',
+      prompt: '🌍 What industries are you most interested in?',
+      type: 'multi_select',
+      options: [
+        'AI / ML',
+        'Climate / Sustainability',
+        'Fintech',
+        'Health / Bio',
+        'Creator Economy',
+        'SaaS / B2B',
+        'Social / Communities',
+        'Education / EdTech',
+        'Web3',
+      ],
     },
     // 2. Availability & Work Style
     {

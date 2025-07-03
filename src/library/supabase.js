@@ -6,13 +6,22 @@ const supabaseAnonKey='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-async function testProfiles() {
-  const { data, error } = await supabase
-  .from('profiles')
-  .select('*');
-
-console.log('Profile data:', data);
-console.log('Profile error:', error);
-
+// Temporary test function to check profiles table
+export async function testProfilesTable() {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .limit(5);
+    
+    console.log('Profiles table test:');
+    console.log('Data:', data);
+    console.log('Error:', error);
+    
+    if (data && data.length > 0) {
+      console.log('Sample profile columns:', Object.keys(data[0]));
+    }
+  } catch (err) {
+    console.error('Test error:', err);
+  }
 }
-testProfiles();

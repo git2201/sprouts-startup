@@ -24,11 +24,16 @@ export async function getUserProfile(userId) {
 // Update user profile in database
 export async function updateUserProfile(userId, profileData) {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('Supabase session user id:', user?.id);
+    console.log('userId passed to updateUserProfile:', userId);
+    console.log('profileData.id:', profileData.id);
+
     const { data: profile, error } = await supabase
       .from('profiles')
       .upsert({
-        id: userId,
         ...profileData,
+        id: userId,
         updated_at: new Date().toISOString()
       })
       .select()

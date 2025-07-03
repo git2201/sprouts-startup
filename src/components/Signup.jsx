@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { signUp } from '../library/auth.js'
+import { supabase } from '../library/supabase'
 
-const Signup = ({ onSignup, onSwitchToLogin }) => {
+const Signup = ({ onSignup, onSwitchToLogin, onboardingData }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -61,25 +63,20 @@ const Signup = ({ onSignup, onSwitchToLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
-    
     const newErrors = validateForm()
-
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       setIsLoading(false)
       return
     }
-
-    // For demo purposes, accept the signup
-    setTimeout(() => {
-      onSignup({
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        hasProfile: false // This will trigger onboarding
-      })
-      setIsLoading(false)
-    }, 1000)
+    // Only pass signup data up
+    onSignup({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      password: formData.password
+    })
+    setIsLoading(false)
   }
 
   return (
@@ -90,6 +87,11 @@ const Signup = ({ onSignup, onSwitchToLogin }) => {
             <div className="text-4xl mb-2">🌱</div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Join Sprout</h1>
             <p className="text-gray-600">Create your account to find your perfect cofounder</p>
+            {errors.general && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-red-600 text-sm">{errors.general}</p>
+              </div>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

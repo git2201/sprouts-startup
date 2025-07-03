@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Your Email - Sprout</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            padding: 48px;
+            text-align: center;
+            max-width: 480px;
+            width: 100%;
+        }
+
+        .logo {
+            font-size: 64px;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            color: #111827;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            font-size: 18px;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .email-box {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 32px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .steps {
+            text-align: left;
+            margin-bottom: 32px;
+        }
+
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .step-number {
+            background: #22c55e;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 12px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .back-button {
+            background: #22c55e;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-button:hover {
+            background: #16a34a;
+            transform: translateY(-1px);
+        }
+
+        .footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: #22c55e;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 32px 24px;
+            }
+            
+            h1 {
+                font-size: 28px;
+            }
+            
+            .subtitle {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🌱</div>
+        
+        <h1>Check your email</h1>
+        
+        <p class="subtitle">
+            We've sent a confirmation link to your email address. Click the link to activate your account and start finding your perfect cofounder.
+        </p>
+
+        <div class="email-box" id="email-display">
+            <!-- Email will be populated by JavaScript -->
+        </div>
+
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div>Check your email inbox (and spam folder)</div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div>Click the "Confirm Email" button in the email</div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div>Complete your profile and start matching!</div>
+            </div>
+        </div>
+
+        <a href="https://your-app-domain.com" class="back-button">
+            Back to Sprout
+        </a>
+
+        <div class="footer">
+            <p>Didn't receive the email? Check your spam folder or <a href="mailto:support@your-app.com">contact support</a></p>
+        </div>
+    </div>
+
+    <script>
+        // Extract email from URL parameters
+        function getEmailFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('email');
+        }
+
+        // Display the email address
+        function displayEmail() {
+            const email = getEmailFromUrl();
+            const emailDisplay = document.getElementById('email-display');
+            
+            if (email) {
+                emailDisplay.textContent = email;
+            } else {
+                emailDisplay.textContent = 'your email address';
+            }
+        }
+
+        // Update the back button URL to your actual app URL
+        function updateBackButton() {
+            const backButton = document.querySelector('.back-button');
+            // Replace with your actual app URL
+            backButton.href = 'https://your-app-domain.com';
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            displayEmail();
+            updateBackButton();
+        });
+    </script>
+</body>
+</html> 

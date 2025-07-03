@@ -284,12 +284,12 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
                 )}
               </p>
               {matches.length > 0 ? (
-                <button
-                  onClick={() => setActiveTab('matches')}
-                  className="btn-primary"
-                >
-                  View Your Matches
-                </button>
+              <button
+                onClick={() => setActiveTab('matches')}
+                className="btn-primary"
+              >
+                View Your Matches
+              </button>
               ) : (
                 <div className="space-y-4">
                   <button
@@ -397,52 +397,52 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {matches.map((match) => (
-                  <div key={match.id} className="bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
-                    <div className="flex items-start justify-between mb-6">
-                      <div className="flex items-center space-x-4">
-                        <div className="text-4xl">{match.avatar}</div>
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-xl">{match.name}</h3>
+                <div key={match.id} className="bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-center space-x-4">
+                      <div className="text-4xl">{match.avatar}</div>
+                      <div>
+                        <h3 className="font-bold text-gray-900 text-xl">{match.name}</h3>
                           <p className="text-gray-600 font-medium">{match.profile.role}</p>
-                        </div>
                       </div>
-                      <span className={`px-4 py-2 rounded-full text-sm font-bold ${getMatchScoreColor(match.matchScore)}`}>
-                        {match.matchScore}% match
-                      </span>
                     </div>
-                    
-                    <div className="space-y-4">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 font-medium">Personality:</span>
+                    <span className={`px-4 py-2 rounded-full text-sm font-bold ${getMatchScoreColor(match.matchScore)}`}>
+                      {match.matchScore}% match
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 font-medium">Personality:</span>
                         <span className="font-semibold">{match.profile.personality}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 font-medium">Work Style:</span>
-                        <span className="font-semibold">{match.profile.work_style}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 font-medium">Motivation:</span>
-                        <span className="font-semibold">{match.profile.motivation}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 font-medium">Stage:</span>
-                        <span className="font-semibold">{match.profile.startup_stage}</span>
-                      </div>
                     </div>
-                    
-                    <div className="mt-6 flex space-x-3">
-                      <button className="btn-primary flex-1">
-                        Connect
-                      </button>
-                      <button className="btn-secondary">
-                        View Profile
-                      </button>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 font-medium">Work Style:</span>
+                        <span className="font-semibold">{match.profile.work_style}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 font-medium">Motivation:</span>
+                        <span className="font-semibold">{match.profile.motivation}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 font-medium">Stage:</span>
+                        <span className="font-semibold">{match.profile.startup_stage}</span>
                     </div>
                   </div>
-                ))}
-              </div>
+                  
+                  <div className="mt-6 flex space-x-3">
+                    <button className="btn-primary flex-1">
+                      Connect
+                    </button>
+                    <button className="btn-secondary">
+                      View Profile
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
             )}
           </div>
         )}
