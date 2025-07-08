@@ -7,15 +7,15 @@
 
 .app {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* Header */
 .header {
-  background: rgba(255, 255, 255, 0.1);
+  background: #fff;
   backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: none;
   padding: 1rem 0;
 }
 
@@ -41,12 +41,12 @@
 .logo h1 {
   font-size: 2.5rem;
   font-weight: 700;
-  color: white;
+  color: #223344;
   margin: 0;
 }
 
 .tagline {
-  color: rgba(255, 255, 255, 0.9);
+  color: #223344;
   font-size: 1.1rem;
   font-weight: 400;
 }
@@ -120,9 +120,9 @@
 }
 
 .option-card:hover {
-  border-color: #667eea;
+  border-color: #22c55e;
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+  box-shadow: 0 8px 25px rgba(34, 197, 94, 0.15);
 }
 
 .option-card:active {
@@ -240,7 +240,7 @@
 
 /* Buttons */
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #22c55e 0%, #4ade80 100%);
   color: white;
   border: none;
   padding: 1rem 2rem;
@@ -249,16 +249,21 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
   }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4);
 }
 
 .btn-primary:active {
   transform: translateY(0);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid #22c55e;
+  outline-offset: 2px;
 }
 
 /* Responsive Design */

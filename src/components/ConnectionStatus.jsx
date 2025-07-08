@@ -73,7 +73,7 @@ const ConnectionStatus = ({
                     If your match does not pay in 48 hours you will be refunded and put back into the match system.
                   </div>
                   <button
-                    className="mt-4 px-6 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700"
+                    className="mt-4 px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700"
                     onClick={() => setShowRefundInfo(false)}
                   >
                     OK

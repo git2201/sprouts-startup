@@ -13,8 +13,13 @@ import ConnectionStatus from './ConnectionStatus.jsx'
 import PaymentModal from './PaymentModal.jsx'
 import StripeBuyButton from './StripeBuyButton.jsx'
 import { handlePaymentSuccess as updatePaymentInSupabase } from '../library/payments.js'
+import { Navigate } from 'react-router-dom';
 
 const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
+  if (!user || !userProfile || !onLogout) {
+    return <Navigate to="/login" replace />;
+  }
+  console.log('Dashboard rendered', { onLogout });
   const [activeTab, setActiveTab] = useState('overview')
   const [matches, setMatches] = useState([])
   const [stats, setStats] = useState(null)
@@ -323,6 +328,7 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
   }
 
   const handleLogout = async () => {
+    console.log('Sign Out button clicked in Dashboard');
     await signOut()
     onLogout()
   }
@@ -433,7 +439,7 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
             <div className="text-center">
               <div className="text-5xl mb-4">{userProfile?.avatar || '👤'}</div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">{userProfile?.name}</h2>
-              <div className="text-lg text-primary-600 font-semibold mb-2">{getPersonaName()}</div>
+              <div className="text-lg text-green-600 font-semibold mb-2">{getPersonaName()}</div>
               <div className="mb-4 text-gray-700 font-medium">{getRolesSkills()}</div>
               <div className="mb-4 text-gray-700">{getMotivation()}</div>
               <div className="mb-4 text-gray-700">{getWorkStyle()}</div>
@@ -458,7 +464,7 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
 
       {editingInterests && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative" style={{ zIndex: 10000, pointerEvents: 'auto', border: '2px solid #7c3aed' }}>
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative" style={{ zIndex: 10000, pointerEvents: 'auto', border: '2px solid #22c55e' }}>
             <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setEditingInterests(false)}>&times;</button>
             <h2 className="text-xl font-bold mb-4">Edit Your Interests</h2>
             <form
@@ -513,7 +519,7 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
               onClick={() => setActiveTab('overview')}
               className={`py-2 px-1 border-b-2 font-semibold text-sm transition-colors ${
                 activeTab === 'overview'
-                  ? 'border-primary-500 text-primary-600'
+                  ? 'border-green-500 text-green-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
@@ -523,7 +529,7 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
               onClick={() => setActiveTab('matches')}
               className={`py-2 px-1 border-b-2 font-semibold text-sm transition-colors ${
                 activeTab === 'matches'
-                  ? 'border-primary-500 text-primary-600'
+                  ? 'border-green-500 text-green-600'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
@@ -549,11 +555,11 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
             {/* Welcome Section */}
             <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
               <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                Welcome back, <span className="text-primary-600">{getUserFirstName()}</span>! 
+                Welcome back, <span className="text-green-600">{getUserFirstName()}</span>! 
               </h2>
               <p className="text-xl text-gray-600 mb-6">
                 {matches.length > 0 ? (
-                  <>We've found <span className="font-bold text-primary-600">{matches.length} potential cofounders</span> who match your profile and could be perfect for your next venture.</>
+                  <>We've found <span className="font-bold text-green-600">{matches.length} potential cofounders</span> who match your profile and could be perfect for your next venture.</>
                 ) : (
                   <>We're actively searching for your ideal cofounder match. New people join every day, so check back soon!</>
                 )}
@@ -626,7 +632,7 @@ Let's build something great together! 🚀`;
                     <p className="text-gray-600 mb-6 max-w-md mx-auto">
                       You can continue matching after 36 hours.<br/>
                       {userProfile?.pause_until && (
-                        <span className="block mt-2 text-primary-600 font-semibold">Resume: {new Date(userProfile.pause_until).toLocaleString()}</span>
+                        <span className="block mt-2 text-green-600 font-semibold">Resume: {new Date(userProfile.pause_until).toLocaleString()}</span>
                       )}
                     </p>
                     <div className="text-sm text-gray-500">

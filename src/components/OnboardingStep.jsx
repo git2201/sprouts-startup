@@ -64,7 +64,7 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
             value={selectedValue}
             onChange={e => setSelectedValue(e.target.value)}
             placeholder="Enter your age"
-            className="w-1/2 p-3 border-2 border-gray-200 rounded-xl text-center text-2xl font-bold focus:border-primary-400 focus:outline-none"
+            className="w-1/2 p-3 border-2 border-gray-200 rounded-xl text-center text-2xl font-bold focus:border-green-400 focus:outline-none"
           />
           <button
             className="btn-primary mt-6"
@@ -87,7 +87,7 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
           />
           <div className="flex justify-between w-2/3 mt-2 text-sm">
             {[1, 2, 3, 4, 5, 6].map((num) => (
-              <span key={num} className={selectedValue === num ? 'font-bold text-primary-600' : ''}>{num}</span>
+              <span key={num} className={selectedValue === num ? 'font-bold text-green-600' : ''}>{num}</span>
             ))}
           </div>
           <button
@@ -105,7 +105,7 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
           {step.options.map((option) => (
             <button
               key={option}
-              className={`group bg-white border-2 rounded-2xl p-6 text-left transition-all duration-300 transform ${selectedValue === option ? 'border-primary-400 shadow-xl' : 'border-gray-200 hover:border-primary-400 hover:shadow-xl hover:-translate-y-1'}`}
+              className={`group bg-white border-2 rounded-2xl p-6 text-left transition-all duration-300 transform ${selectedValue === option ? 'border-green-400 shadow-xl' : 'border-gray-200 hover:border-green-400 hover:shadow-xl hover:-translate-y-1'}`}
               onClick={() => handleOptionSelect(option)}
               type="button"
             >
@@ -126,13 +126,13 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
           {step.options.map((option) => (
             <label
               key={option}
-              className={`flex items-center bg-white border-2 rounded-2xl p-4 cursor-pointer transition-all duration-300 ${selectedValue.includes(option) ? 'border-primary-400 shadow-xl' : 'border-gray-200 hover:border-primary-400 hover:shadow-xl'}`}
+              className={`flex items-center bg-white border-2 rounded-2xl p-4 cursor-pointer transition-all duration-300 ${selectedValue.includes(option) ? 'border-green-400 shadow-xl' : 'border-gray-200 hover:border-green-400 hover:shadow-xl'}`}
             >
               <input
                 type="checkbox"
                 checked={selectedValue.includes(option)}
                 onChange={() => handleOptionSelect(option)}
-                className="mr-3 accent-primary-500"
+                className="mr-3 accent-green-500"
               />
               <span className="text-lg font-medium">{option}</span>
             </label>

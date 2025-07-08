@@ -53,7 +53,7 @@ const PaymentModal = ({
           <div className="space-y-3">
             <button
               onClick={() => window.open(STRIPE_PAYMENT_LINK, '_blank')}
-              className="w-full py-3 px-6 rounded-xl font-semibold text-lg bg-primary-600 text-white hover:bg-primary-700 transform hover:scale-105 transition-all duration-200"
+              className="w-full py-3 px-6 rounded-xl font-semibold text-lg bg-green-600 text-white hover:bg-green-700 transform hover:scale-105 transition-all duration-200"
             >
               Pay $25.00
             </button>

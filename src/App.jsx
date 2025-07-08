@@ -272,28 +272,118 @@ function App() {
       {redirect}
       <Routes>
         <Route path="/" element={
-          <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
-            <div className="max-w-md w-full">
-              <div className="bg-white rounded-3xl shadow-2xl p-8 text-center">
-                <div className="text-5xl mb-6">🌱</div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">Welcome to Sprout</h1>
-                <p className="text-gray-600 mb-8">Find your perfect cofounder</p>
-                <div className="space-y-4">
-                  <button 
-                    className="btn-primary w-full"
-                    onClick={switchToOnboarding}
-                  >
-                    Get Started
-                  </button>
-                  <button 
-                    className="btn-secondary w-full"
-                    onClick={switchToLogin}
-                  >
-                    I already have an account
-                  </button>
+          <div className="min-h-screen flex flex-col bg-gradient-to-br from-white to-green-50 font-sans">
+            {/* Hero Section */}
+            <section className="relative flex flex-col items-center justify-center text-center px-4 pt-24 pb-32 bg-gradient-to-br from-green-500 to-green-300 overflow-hidden">
+              {/* Abstract 3D/Isometric Shape */}
+              <div className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-tr from-green-200 via-green-100 to-transparent rounded-full blur-3xl opacity-60 z-0"></div>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-green-100 via-white to-transparent rounded-full blur-2xl opacity-40 z-0"></div>
+              <h1 className="relative z-10 text-4xl md:text-6xl font-extrabold text-white mb-6 leading-tight">
+                Build with someone who actually <span className="text-white/90">gets it.</span>
+              </h1>
+              <p className="relative z-10 text-lg md:text-2xl text-white/90 mb-8 max-w-2xl mx-auto">
+                Sprout matches you with a cofounder who shares your vision and complements your skills. No more random DMs — just real, meaningful connections.
+              </p>
+              <button
+                className="relative z-10 px-8 py-4 rounded-xl bg-white text-green-700 font-bold text-lg shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-300 border border-green-600 hover:bg-green-50"
+                onClick={switchToOnboarding}
+              >
+                Find Your Cofounder
+              </button>
+              {/* Subtle 3D accent */}
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 h-16 bg-gradient-to-r from-green-200 to-green-100 rounded-full blur-2xl opacity-40 z-0"></div>
+            </section>
+
+            {/* How it Works Section */}
+            <section className="max-w-5xl mx-auto py-20 px-4">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">How it works</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                {/* Step 1 */}
+                <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
+                  <div className="mb-4">
+                    <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#D1FAE5"/><path d="M18 36V20a2 2 0 012-2h16a2 2 0 012 2v16" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="22" y="24" width="12" height="8" rx="2" fill="#34D399"/></svg>
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">1. Fill your profile</h3>
+                  <p className="text-gray-600">Tell us about your skills, vision, and what you’re looking for in a cofounder.</p>
+                </div>
+                {/* Step 2 */}
+                <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
+                  <div className="mb-4">
+                    <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#BBF7D0"/><path d="M18 28h20M28 18v20" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">2. We match you</h3>
+                  <p className="text-gray-600">Our algorithm finds the best fit based on your goals and working style.</p>
+                </div>
+                {/* Step 3 */}
+                <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
+                  <div className="mb-4">
+                    <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#6EE7B7"/><path d="M20 32l8-8 8 8" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">3. You connect</h3>
+                  <p className="text-gray-600">Start a conversation and build something great together.</p>
                 </div>
               </div>
-            </div>
+            </section>
+
+            {/* Why Sprout Section */}
+            <section className="max-w-6xl mx-auto py-20 px-4">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">Why Sprout?</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
+                  <svg width="40" height="40" fill="none" viewBox="0 0 40 40" className="mb-4"><circle cx="20" cy="20" r="20" fill="#D1FAE5"/><path d="M13 27l7-7 7 7" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <h3 className="text-lg font-semibold mb-2">Aligned vision</h3>
+                  <p className="text-gray-600 text-center">We match you with founders who share your goals and values.</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
+                  <svg width="40" height="40" fill="none" viewBox="0 0 40 40" className="mb-4"><circle cx="20" cy="20" r="20" fill="#BBF7D0"/><path d="M20 13v14M13 20h14" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <h3 className="text-lg font-semibold mb-2">Complementary skills</h3>
+                  <p className="text-gray-600 text-center">Find partners who bring new strengths to your team.</p>
+                </div>
+                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
+                  <svg width="40" height="40" fill="none" viewBox="0 0 40 40" className="mb-4"><circle cx="20" cy="20" r="20" fill="#6EE7B7"/><path d="M15 25l5-5 5 5" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <h3 className="text-lg font-semibold mb-2">No random DMs</h3>
+                  <p className="text-gray-600 text-center">Connect only with serious, vetted founders — no spam.</p>
+                </div>
+              </div>
+            </section>
+
+            {/* Stats / Social Proof Section */}
+            <section className="max-w-4xl mx-auto py-20 px-4">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">What founders are saying</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Placeholder testimonial cards */}
+                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col justify-between hover:shadow-xl transition-shadow duration-200">
+                  <p className="text-gray-700 text-lg mb-4">“Sprout helped me find a cofounder who truly shares my vision. We launched our MVP in 3 months!”</p>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">A</div>
+                    <div>
+                      <div className="font-semibold text-gray-900">Alex P.</div>
+                      <div className="text-gray-500 text-sm">Founder, Seedly</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col justify-between hover:shadow-xl transition-shadow duration-200">
+                  <p className="text-gray-700 text-lg mb-4">“The matching process was seamless and the quality of connections is top-notch.”</p>
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">S</div>
+                    <div>
+                      <div className="font-semibold text-gray-900">Samantha R.</div>
+                      <div className="text-gray-500 text-sm">Co-founder, Launchly</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Add more testimonials or stats as needed */}
+              </div>
+            </section>
+            {/* Footer with login button */}
+            <footer className="w-full flex flex-col items-center justify-center py-12 mt-12">
+              <button
+                className="px-8 py-4 rounded-xl bg-white border border-green-600 text-green-700 font-bold text-lg shadow transition-all duration-200 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-300"
+                onClick={switchToLogin}
+              >
+                I already have an account
+              </button>
+            </footer>
           </div>
         } />
         <Route path="/login" element={<Login onLogin={handleLogin} onSwitchToSignup={switchToSignup} />} />
@@ -301,58 +391,62 @@ function App() {
         <Route path="/onboarding" element={<OnboardingFlow onComplete={handleOnboardingComplete} />} />
         <Route path="/stripe-test" element={<StripeTest />} />
         <Route path="/dashboard" element={
-          <Dashboard
-            user={user}
-            userProfile={userProfile}
-            onLogout={handleLogout}
-            editing={editing}
-            editFields={editFields}
-            setEditing={setEditing}
-            setEditFields={setEditFields}
-          >
-            {!editing ? (
-              <>
-                <button onClick={() => setEditing(true)} className="btn-primary">Edit Profile</button>
-              </>
-            ) : (
-              <form onSubmit={handleEditSubmit}>
-                <label>
-                  Availability:
-                  <input
-                    type="text"
-                    value={editFields.availability}
-                    onChange={e => setEditFields({ ...editFields, availability: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Communication:
-                  <input
-                    type="text"
-                    value={editFields.communication}
-                    onChange={e => setEditFields({ ...editFields, communication: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Roles:
-                  <input
-                    type="text"
-                    value={editFields.roles.join(', ')}
-                    onChange={e => setEditFields({ ...editFields, roles: e.target.value.split(',').map(r => r.trim()) })}
-                  />
-                </label>
-                <label>
-                  Industries:
-                  <input
-                    type="text"
-                    value={editFields.industries.join(', ')}
-                    onChange={e => setEditFields({ ...editFields, industries: e.target.value.split(',').map(i => i.trim()) })}
-                  />
-                </label>
-                <button type="submit" className="btn-primary">Save</button>
-                <button type="button" onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
-              </form>
-            )}
-          </Dashboard>
+          user && userProfile ? (
+            <Dashboard
+              user={user}
+              userProfile={userProfile}
+              onLogout={handleLogout}
+              editing={editing}
+              editFields={editFields}
+              setEditing={setEditing}
+              setEditFields={setEditFields}
+            >
+              {!editing ? (
+                <>
+                  <button onClick={() => setEditing(true)} className="btn-primary">Edit Profile</button>
+                </>
+              ) : (
+                <form onSubmit={handleEditSubmit}>
+                  <label>
+                    Availability:
+                    <input
+                      type="text"
+                      value={editFields.availability}
+                      onChange={e => setEditFields({ ...editFields, availability: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Communication:
+                    <input
+                      type="text"
+                      value={editFields.communication}
+                      onChange={e => setEditFields({ ...editFields, communication: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Roles:
+                    <input
+                      type="text"
+                      value={editFields.roles.join(', ')}
+                      onChange={e => setEditFields({ ...editFields, roles: e.target.value.split(',').map(r => r.trim()) })}
+                    />
+                  </label>
+                  <label>
+                    Industries:
+                    <input
+                      type="text"
+                      value={editFields.industries.join(', ')}
+                      onChange={e => setEditFields({ ...editFields, industries: e.target.value.split(',').map(i => i.trim()) })}
+                    />
+                  </label>
+                  <button type="submit" className="btn-primary">Save</button>
+                  <button type="button" onClick={() => setEditing(false)} className="btn-secondary">Cancel</button>
+                </form>
+              )}
+            </Dashboard>
+          ) : (
+            <Navigate to="/login" replace />
+          )
         } />
       </Routes>
     </div>

@@ -226,7 +226,7 @@ const OnboardingFlow = ({ onComplete }) => {
   const currentStepData = onboardingQuestions[currentStep]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
         {/* Header */}
         <div className="text-center mb-8">
@@ -246,13 +246,13 @@ const OnboardingFlow = ({ onComplete }) => {
               <span className="text-sm font-semibold text-gray-600">
                 Step {currentStep + 1} of {onboardingQuestions.length}
               </span>
-              <span className="text-sm font-semibold text-primary-600">
+              <span className="text-sm font-semibold text-green-600">
                 {Math.round(((currentStep + 1) / onboardingQuestions.length) * 100)}% Complete
               </span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div 
-                className="bg-gradient-to-r from-primary-500 to-primary-600 h-3 rounded-full transition-all duration-500 ease-out"
+                className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full transition-all duration-500 ease-out"
                 style={{ width: `${((currentStep + 1) / onboardingQuestions.length) * 100}%` }}
               ></div>
             </div>
@@ -287,7 +287,7 @@ const OnboardingFlow = ({ onComplete }) => {
                   ? selectedProfile.name
                   : 'No Name'}
               </h2>
-              <div className="text-lg text-primary-600 font-semibold mb-2">
+              <div className="text-lg text-green-600 font-semibold mb-2">
                 Sprout Founder
               </div>
               <div className="mb-4 text-gray-700 font-medium whitespace-pre-line text-center leading-relaxed">

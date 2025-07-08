@@ -85,7 +85,7 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
@@ -129,7 +129,7 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
           <div className="mt-6 text-center">
             <p className="text-gray-600">
               Don't have an account?{' '}
-              <button onClick={onSwitchToSignup} className="text-primary-600 hover:text-primary-700 font-medium" disabled={isLoading}>
+              <button onClick={onSwitchToSignup} className="text-green-600 hover:text-green-700 font-medium" disabled={isLoading}>
                 Sign up
               </button>
             </p>
