@@ -1,14 +1,44 @@
 import { useState, useEffect } from 'react'
 import { signOut } from '../library/auth.js'
 import { findMatchesForUser, getMatchStatistics } from '../library/matching.js'
+import { updateUserProfile, getUserProfile } from '../library/profiles.js'
+import { 
+  requestConnection, 
+  getConnectionStatus, 
+  sendConnectionEmail,
+  getUserProfileById,
+  deleteConnection
+} from '../library/connections.js'
+import ConnectionStatus from './ConnectionStatus.jsx'
+import PaymentModal from './PaymentModal.jsx'
+import StripeBuyButton from './StripeBuyButton.jsx'
+import { handlePaymentSuccess as updatePaymentInSupabase } from '../library/payments.js'
 
-const Dashboard = ({ user, userProfile, onLogout }) => {
+const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
   const [activeTab, setActiveTab] = useState('overview')
   const [matches, setMatches] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [editFields, setEditFields] = useState({
+    interests: userProfile?.interests || '',
+  })
+  const [editingInterests, setEditingInterests] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [selectedProfile, setSelectedProfile] = useState(null)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  
+  // New state for connection flow
+  const [connections, setConnections] = useState({})
+  const [connectingUsers, setConnectingUsers] = useState(new Set())
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedConnection, setSelectedConnection] = useState(null)
+  const [paymentError, setPaymentError] = useState(null)
+
+  // New state for pause functionality
+  const [pauseUntil, setPauseUntil] = useState(null)
+  const [showPauseDialog, setShowPauseDialog] = useState({ open: false, match: null })
 
   // Get user's first name
   const getUserFirstName = () => {
@@ -21,22 +51,33 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
     return 'there'
   }
 
-  // Load matches and stats
+  // Load matches, stats, and connection statuses
   useEffect(() => {
+    console.log('Dashboard useEffect running, user:', user);
     const loadData = async () => {
-      if (!user?.id) return
-      
+      if (!user?.id) {
+        console.log('No user.id, skipping loadData');
+        return;
+      }
       setLoading(true)
       setError(null)
-      
       try {
         // Load matches for current user
         const { matches: userMatches, error: matchesError } = await findMatchesForUser(user.id, 6)
+        console.log('findMatchesForUser result:', userMatches, matchesError);
         if (matchesError) {
           console.error('Error loading matches:', matchesError)
           setError('Failed to load matches')
         } else {
           setMatches(userMatches)
+          
+          // Load connection statuses for all matches
+          const connectionStatuses = {}
+          for (const match of userMatches) {
+            const { connection } = await getConnectionStatus(user.id, match.id)
+            connectionStatuses[match.id] = connection
+          }
+          setConnections(connectionStatuses)
         }
 
         // Load statistics
@@ -57,10 +98,117 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
     loadData()
   }, [user?.id])
 
+  // Handle connection request
+  const handleConnect = async (targetUserId, targetUserName) => {
+    if (!user?.id) return
+    
+    setConnectingUsers(prev => new Set(prev).add(targetUserId))
+    
+    try {
+      const result = await requestConnection(user.id, targetUserId)
+      
+      if (result.success) {
+        // Immediately re-fetch the latest connection status
+        const { connection: latestConnection } = await getConnectionStatus(user.id, targetUserId)
+        setConnections(prev => ({
+          ...prev,
+          [targetUserId]: latestConnection || result.connection
+        }))
+        // Show a message if both users have connected
+        if (latestConnection && latestConnection.user_a_connected && latestConnection.user_b_connected) {
+          setSuccessMessage('You have both decided to connect! Proceed to payment.');
+          setTimeout(() => setSuccessMessage(''), 4000)
+        } else {
+          // Send email notification if this is the first connection
+          if (!result.connection.user_b_connected) {
+            const { profile: targetProfile } = await getUserProfileById(targetUserId)
+            if (targetProfile?.email) {
+              await sendConnectionEmail(
+                targetProfile.email,
+                targetProfile.name || targetUserName,
+                userProfile?.name || getUserFirstName()
+              )
+            }
+          }
+          setSuccessMessage('Connection request sent!')
+          setTimeout(() => setSuccessMessage(''), 3000)
+        }
+      } else {
+        setError(result.error)
+        setTimeout(() => setError(null), 5000)
+      }
+    } catch (err) {
+      console.error('Error requesting connection:', err)
+      setError('Failed to send connection request')
+      setTimeout(() => setError(null), 5000)
+    } finally {
+      setConnectingUsers(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(targetUserId)
+        return newSet
+      })
+    }
+  }
+
+  // Handle payment initiation
+  const handlePayment = (connection, targetUserName) => {
+    setSelectedConnection({ connection, targetUserName })
+    setShowPaymentModal(true)
+  }
+
+  // Handle payment success
+  const handlePaymentSuccess = async (result) => {
+    // Update payment status in Supabase if possible
+    if (result && result.connectionId && result.userId && result.paymentIntentId) {
+      await updatePaymentInSupabase(result.connectionId, result.userId, result.paymentIntentId);
+    }
+    if (selectedConnection) {
+      // Update connection status
+      const { connection: latestConnection } = await getConnectionStatus(user.id, selectedConnection.connection.user_a_id === user.id ? selectedConnection.connection.user_b_id : selectedConnection.connection.user_a_id);
+      setConnections(prev => ({
+        ...prev,
+        [selectedConnection.connection.user_b_id === user.id 
+          ? selectedConnection.connection.user_a_id 
+          : selectedConnection.connection.user_b_id]: latestConnection || result.connection
+      }))
+      setSuccessMessage('Payment completed! Contact information will be revealed once both users have paid.')
+      setTimeout(() => setSuccessMessage(''), 5000)
+
+      // If both users have paid, send confirmation email to both
+      if (latestConnection && latestConnection.user_a_paid && latestConnection.user_b_paid) {
+        // Fetch both user profiles
+        const { profile: userAProfile } = await getUserProfileById(latestConnection.user_a_id)
+        const { profile: userBProfile } = await getUserProfileById(latestConnection.user_b_id)
+        // Send confirmation email to both
+        if (userAProfile?.email && userBProfile?.email) {
+          await sendConnectionEmail(
+            userAProfile.email,
+            userAProfile.name || 'Your partner',
+            userBProfile.name || 'Your partner',
+            userBProfile.email // partner's email
+          )
+          await sendConnectionEmail(
+            userBProfile.email,
+            userBProfile.name || 'Your partner',
+            userAProfile.name || 'Your partner',
+            userAProfile.email // partner's email
+          )
+        }
+      }
+    }
+  }
+
+  // Handle payment error
+  const handlePaymentError = (error) => {
+    setPaymentError(error)
+    setTimeout(() => setPaymentError(null), 5000)
+  }
+
   const getMatchScoreColor = (score) => {
     if (score >= 90) return 'text-green-600 bg-green-100'
     if (score >= 80) return 'text-blue-600 bg-blue-100'
     if (score >= 70) return 'text-yellow-600 bg-yellow-100'
+    if (score >= 60) return 'text-orange-600 bg-orange-100'
     return 'text-gray-600 bg-gray-100'
   }
 
@@ -179,6 +327,72 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
     onLogout()
   }
 
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditingInterests(false); // Close modal immediately
+    const { error } = await updateUserProfile(user.id, {
+      ...userProfile,
+      interests: editFields.interests,
+    });
+    if (!error) {
+      // Re-fetch the latest profile from Supabase
+      const { profile } = await getUserProfile(user.id);
+      if (profile) setUserProfile(profile);
+      setSuccessMessage('Your interests have been updated!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } else {
+      alert('Error updating profile: ' + (error.message || JSON.stringify(error)));
+    }
+  };
+
+  function getProfileSummary(profile) {
+    const role = profile.role ? `${profile.role}. ` : '';
+    const motivation = profile.top_motivation || profile.motivation || '';
+    const motivationText = motivation
+      ? `Driven by ${motivation.toLowerCase()} and the desire to build something meaningful.`
+      : '';
+
+    // Work style
+    let avail = profile.availability || '';
+    if (avail === '10–20') avail = '10–20 hrs/week';
+    if (avail === '20–40') avail = '20–40 hrs/week';
+    if (avail === 'full_time') avail = 'Full-time';
+    const chrono = profile.chronotype || '';
+    const comm = profile.communication || '';
+    const team = profile.team_style || '';
+    const workStyleText = `Available ${avail}${chrono ? `, ${chrono}` : ''}${comm ? `, ${comm}` : ''}${team ? `, and ${team}` : ''}.`;
+
+    // Interests
+    const interests = profile.interests ? `Interests: ${profile.interests}` : '';
+
+    // Combine
+    return [role, motivationText, workStyleText, interests]
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  // Helper to check if user is paused
+  const isUserPaused = () => {
+    if (!userProfile || !userProfile.pause_until) return false;
+    return new Date(userProfile.pause_until) > new Date();
+  }
+
+  // Handler for pause and remove match
+  const handlePauseAndRemoveMatch = async (targetUserId, targetUserName) => {
+    // Set pause until 36 hours from now
+    const pauseUntilDate = new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString();
+    // Update user profile with pause_until
+    await updateUserProfile(user.id, { ...userProfile, pause_until: pauseUntilDate });
+    setPauseUntil(pauseUntilDate);
+    // Remove the match/connection
+    await deleteConnection(user.id, targetUserId);
+    setSuccessMessage(`You have been paused from matching for 36 hours. You can match again after ${new Date(pauseUntilDate).toLocaleString()}.`);
+    setShowPauseDialog({ open: false, match: null });
+    // Optionally, refresh matches
+    const { matches: userMatches } = await findMatchesForUser(user.id, 6);
+    setMatches(userMatches);
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 font-poppins">
       {/* Header */}
@@ -224,6 +438,67 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
               <div className="mb-4 text-gray-700">{getMotivation()}</div>
               <div className="mb-4 text-gray-700">{getWorkStyle()}</div>
               <div className="mb-4 text-gray-700 italic">{getPersonalityBlend()}</div>
+              <div className="mb-4 text-gray-700">
+                <span className="font-semibold">Interests:</span>
+                <div>{userProfile?.interests ? userProfile.interests : <span className="text-gray-400">Not specified</span>}</div>
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setEditFields({ interests: userProfile?.interests || '' });
+                  setEditingInterests(true);
+                }}
+              >
+                Edit Interests
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingInterests && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative" style={{ zIndex: 10000, pointerEvents: 'auto', border: '2px solid #7c3aed' }}>
+            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setEditingInterests(false)}>&times;</button>
+            <h2 className="text-xl font-bold mb-4">Edit Your Interests</h2>
+            <form
+              onSubmit={e => { console.log('Save clicked, submitting form'); handleEditSubmit(e); }}
+            >
+              <textarea
+                className="form-textarea w-full mb-4"
+                rows={4}
+                value={editFields.interests}
+                onChange={e => setEditFields({ ...editFields, interests: e.target.value })}
+                placeholder="E.g. I love hiking, building side projects, and reading about AI."
+              />
+              <button type="submit" className="btn-primary mr-2" tabIndex={0}>Save</button>
+              <button type="button" className="btn-secondary" onClick={() => setEditingInterests(false)}>Cancel</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg z-50">
+          {successMessage}
+        </div>
+      )}
+
+      {paymentError && (
+        <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-xl shadow-lg z-50">
+          Payment Error: {paymentError}
+        </div>
+      )}
+
+      {showPauseDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative">
+            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowPauseDialog({ open: false, match: null })}>&times;</button>
+            <h2 className="text-xl font-bold mb-4">Are you sure?</h2>
+            <p className="mb-4">If you choose not to match with <b>{showPauseDialog.match?.name}</b>, you will be removed from the matching pool for 36 hours. <br/>You can match again after that. <br/>Are you sure you want to continue?</p>
+            <div className="flex space-x-4">
+              <button className="btn-primary" onClick={() => handlePauseAndRemoveMatch(showPauseDialog.match.id, showPauseDialog.match.name)}>Yes, remove and pause me</button>
+              <button className="btn-secondary" onClick={() => setShowPauseDialog({ open: false, match: null })}>Cancel</button>
             </div>
           </div>
         </div>
@@ -284,12 +559,44 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
                 )}
               </p>
               {matches.length > 0 ? (
-              <button
-                onClick={() => setActiveTab('matches')}
-                className="btn-primary"
-              >
-                View Your Matches
-              </button>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <button
+                    onClick={() => setActiveTab('matches')}
+                    className="btn-primary"
+                  >
+                    View Your Matches
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={async () => {
+                      const shareUrl = window.location.origin;
+                      const shareText = `Hey! 👋
+
+I just found an awesome platform called Sprout that matches you with the perfect cofounder based on your skills, interests, and working style. I think you'd love it!
+
+Check it out: ${shareUrl}
+
+Let's build something great together! 🚀`;
+
+                      if (navigator.share) {
+                        try {
+                          await navigator.share({
+                            title: "Join me on Sprout – Find your perfect cofounder!",
+                            text: shareText,
+                            url: shareUrl,
+                          });
+                        } catch (err) {
+                          // User cancelled or error
+                        }
+                      } else {
+                        await navigator.clipboard.writeText(shareText);
+                        alert("Referral message copied! Paste it anywhere to share with a friend.");
+                      }
+                    }}
+                  >
+                    Refer a Friend
+                  </button>
+                </div>
               ) : (
                 <div className="space-y-4">
                   <button
@@ -304,149 +611,218 @@ const Dashboard = ({ user, userProfile, onLogout }) => {
                 </div>
               )}
             </div>
-
-            {/* Stats Section */}
-            {stats && (
-              <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-                <h3 className="text-3xl font-bold text-gray-900 mb-8">Community Stats</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 text-center">
-                    <div className="text-3xl mb-2">👥</div>
-                    <h4 className="font-bold text-gray-900 text-lg">{stats.totalUsers}</h4>
-                    <p className="text-gray-700">Total Users</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 text-center">
-                    <div className="text-3xl mb-2">🤝</div>
-                    <h4 className="font-bold text-gray-900 text-lg">{stats.totalMatches}</h4>
-                    <p className="text-gray-700">Possible Matches</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 text-center">
-                    <div className="text-3xl mb-2">📊</div>
-                    <h4 className="font-bold text-gray-900 text-lg">{stats.averageMatchScore}%</h4>
-                    <p className="text-gray-700">Avg Match Score</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl p-6 text-center">
-                    <div className="text-3xl mb-2">⚡</div>
-                    <h4 className="font-bold text-gray-900 text-lg">{stats.activeUsers}</h4>
-                    <p className="text-gray-700">Active Users</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Profile Summary */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-              <h3 className="text-3xl font-bold text-gray-900 mb-8">Your Profile Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6">
-                  <div className="text-3xl mb-4">{getRoleEmoji(userProfile?.role)}</div>
-                  <h4 className="font-bold text-gray-900 mb-2 text-lg">Your Superpower</h4>
-                  <p className="text-gray-700 font-medium">{userProfile?.role || 'Not specified'}</p>
-                </div>
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6">
-                  <div className="text-3xl mb-4">{getPersonalityEmoji(userProfile?.personality)}</div>
-                  <h4 className="font-bold text-gray-900 mb-2 text-lg">Personality Type</h4>
-                  <p className="text-gray-700 font-medium">{userProfile?.personality || 'Not specified'}</p>
-                </div>
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6">
-                  <div className="text-3xl mb-4">{getWorkStyleEmoji(userProfile?.work_style)}</div>
-                  <h4 className="font-bold text-gray-900 mb-2 text-lg">Work Style</h4>
-                  <p className="text-gray-700 font-medium">{userProfile?.work_style || 'Not specified'}</p>
-                </div>
-                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-2xl p-6">
-                  <div className="text-3xl mb-4">💪</div>
-                  <h4 className="font-bold text-gray-900 mb-2 text-lg">Motivation</h4>
-                  <p className="text-gray-700 font-medium">{userProfile?.motivation || 'Not specified'}</p>
-                </div>
-                <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-2xl p-6">
-                  <div className="text-3xl mb-4">🤝</div>
-                  <h4 className="font-bold text-gray-900 mb-2 text-lg">Cofounder Preference</h4>
-                  <p className="text-gray-700 font-medium">{userProfile?.cofounder_preference || 'Not specified'}</p>
-                </div>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6">
-                  <div className="text-3xl mb-4">🌱</div>
-                  <h4 className="font-bold text-gray-900 mb-2 text-lg">Startup Stage</h4>
-                  <p className="text-gray-700 font-medium">{userProfile?.startup_stage || 'Not specified'}</p>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
         {activeTab === 'matches' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-4xl font-bold text-gray-900">Your Matches</h2>
-              <p className="text-xl text-gray-600 font-medium">Based on your profile preferences</p>
-            </div>
-            
-            {matches.length === 0 ? (
-              <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-gray-100">
-                <div className="text-6xl mb-6">🔍</div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">Still looking for your ideal match</h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  We're actively searching for cofounders who match your profile. New people join every day, so check back soon!
-                </p>
-                <div className="space-y-4">
-                  <button className="btn-primary">
-                    Invite Friends to Join
-                  </button>
-                  <div className="text-sm text-gray-500">
-                    <p>💡 Tip: The more people who join, the better your matches will be!</p>
+          <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <h2 className="text-4xl font-bold text-gray-900 mb-8 text-center">Your Ideal Cofounder</h2>
+            <div className="w-full flex justify-center">
+              <div className="grid grid-cols-1" style={{ maxWidth: 480, width: '100%' }}>
+                {isUserPaused() ? (
+                  <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-gray-100 flex flex-col items-center justify-center" style={{ minHeight: 350 }}>
+                    <div className="text-6xl mb-6">⏳</div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4">You have been paused from matching</h3>
+                    <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                      You can continue matching after 36 hours.<br/>
+                      {userProfile?.pause_until && (
+                        <span className="block mt-2 text-primary-600 font-semibold">Resume: {new Date(userProfile.pause_until).toLocaleString()}</span>
+                      )}
+                    </p>
+                    <div className="text-sm text-gray-500">
+                      <p>Take this time to reflect on what you're looking for in a cofounder, or update your profile to improve your future matches!</p>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {matches.map((match) => (
-                <div key={match.id} className="bg-white rounded-3xl p-6 shadow-sm hover:shadow-xl transition-shadow border border-gray-100">
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-4xl">{match.avatar}</div>
-                      <div>
-                        <h3 className="font-bold text-gray-900 text-xl">{match.name}</h3>
-                          <p className="text-gray-600 font-medium">{match.profile.role}</p>
+                ) : (
+                  matches.length === 0 ? (
+                    <div className="bg-white rounded-3xl p-12 text-center shadow-sm border border-gray-100">
+                      <div className="text-6xl mb-6">🔍</div>
+                      <h3 className="text-2xl font-bold text-gray-900 mb-4">Still looking for your ideal match</h3>
+                      <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                        We're actively searching for cofounders who match your profile. New people join every day, so check back soon!
+                      </p>
+                      <div className="space-y-4">
+                        <button
+                          className="btn-primary"
+                          onClick={async () => {
+                            const shareUrl = window.location.origin;
+                            const shareText = `Hey! 👋\n\nI just found an awesome platform called Sprout that matches you with the perfect cofounder based on your skills, interests, and working style. I think you'd love it!\n\nCheck it out: ${shareUrl}\n\nLet's build something great together! 🚀`;
+                            if (navigator.share) {
+                              try {
+                                await navigator.share({
+                                  title: "Join me on Sprout – Find your perfect cofounder!",
+                                  text: shareText,
+                                  url: shareUrl,
+                                });
+                              } catch (err) {
+                                // User cancelled or error
+                              }
+                            } else {
+                              await navigator.clipboard.writeText(shareText);
+                              alert("Referral message copied! Paste it anywhere to share with a friend.");
+                            }
+                          }}
+                        >
+                          Invite Friends to Join
+                        </button>
+                        <div className="text-sm text-gray-500">
+                          <p>💡 Tip: The more people who join, the better your matches will be!</p>
+                        </div>
                       </div>
                     </div>
-                    <span className={`px-4 py-2 rounded-full text-sm font-bold ${getMatchScoreColor(match.matchScore)}`}>
-                      {match.matchScore}% match
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 font-medium">Personality:</span>
-                        <span className="font-semibold">{match.profile.personality}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 font-medium">Work Style:</span>
-                        <span className="font-semibold">{match.profile.work_style}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 font-medium">Motivation:</span>
-                        <span className="font-semibold">{match.profile.motivation}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 font-medium">Stage:</span>
-                        <span className="font-semibold">{match.profile.startup_stage}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-6 flex space-x-3">
-                    <button className="btn-primary flex-1">
-                      Connect
-                    </button>
-                    <button className="btn-secondary">
-                      View Profile
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  ) : (
+                    matches.map((match) => {
+                      // Debug log: print the match score received from backend
+                      console.log(`Frontend displaying match for ${match.name}: matchScore =`, match.matchScore);
+                      const connection = connections[match.id];
+                      const notConnectedYet = !connection || (!connection.user_a_connected && !connection.user_b_connected);
+                      return (
+                        <div
+                          key={match.id}
+                          className="bg-white rounded-3xl p-10 shadow-lg border border-gray-100 flex flex-col items-center"
+                          style={{ minWidth: 350, maxWidth: 480, margin: '0 auto' }}
+                        >
+                          <div className="flex flex-col items-center mb-6 w-full">
+                            <div className="text-6xl mb-2">{match.avatar}</div>
+                            <h3 className="font-bold text-2xl text-gray-900">{match.name}</h3>
+                            <p className="text-gray-600 font-medium text-lg mb-2">{match.profile.role}</p>
+                            <span
+                              className={`px-6 py-2 rounded-full text-lg font-bold mt-2 ${getMatchScoreColor(match.matchScore)}`}
+                              style={{ display: 'inline-block' }}
+                            >
+                              {Number(match.matchScore).toFixed(1)}% match
+                            </span>
+                          </div>
+                          <div className="mt-6 space-y-2 text-left">
+                            {/* Roles / Strengths */}
+                            <div>
+                              <span className="font-semibold">Roles / Strengths:</span>
+                              <span className="ml-2">
+                                {Array.isArray(match.profile.roles) && match.profile.roles.length > 0
+                                  ? match.profile.roles.join(', ')
+                                  : <span className="text-gray-400 italic">Not specified</span>}
+                              </span>
+                            </div>
+
+                            {/* Motivation */}
+                            <div>
+                              <span className="font-semibold">Motivation:</span>
+                              <span className="ml-2">
+                                {Array.isArray(match.profile.motivations) && match.profile.motivations.length > 0
+                                  ? match.profile.motivations.join(', ')
+                                  : <span className="text-gray-400 italic">Not specified</span>}
+                              </span>
+                            </div>
+
+                            {/* Industries */}
+                            <div>
+                              <span className="font-semibold">Industries:</span>
+                              <span className="ml-2">
+                                {Array.isArray(match.profile.industries) && match.profile.industries.length > 0
+                                  ? match.profile.industries.join(', ')
+                                  : <span className="text-gray-400 italic">Not specified</span>}
+                              </span>
+                            </div>
+
+                            {/* Availability */}
+                            <div>
+                              <span className="font-semibold">Availability:</span>
+                              <span className="ml-2">
+                                {match.profile.availability && match.profile.availability.trim() !== ''
+                                  ? match.profile.availability
+                                  : <span className="text-gray-400 italic">Not specified</span>}
+                              </span>
+                            </div>
+
+                            {/* Interests (moved here) */}
+                            <div>
+                              <span className="font-semibold">Interests:</span>
+                              <span className="ml-2">
+                                {match.profile.interests && match.profile.interests.trim() !== ''
+                                  ? match.profile.interests
+                                  : <span className="text-gray-400 italic">Not specified</span>}
+                              </span>
+                            </div>
+                          </div>
+                          {!((Array.isArray(match.profile.roles) && match.profile.roles.length > 0) || match.profile.role || match.profile.motivation || match.profile.startup_stage || (match.profile.interests && match.profile.interests.trim() !== '')) && (
+                            <div className="text-gray-400 italic">No details provided yet.</div>
+                          )}
+                          <div className="mt-6 flex space-x-3 w-full">
+                            <ConnectionStatus
+                              connection={connections[match.id]}
+                              currentUserId={user.id}
+                              targetUserName={match.name}
+                              onConnect={() => handleConnect(match.id, match.name)}
+                              onPayment={() => handlePayment(connections[match.id], match.name)}
+                              isLoading={connectingUsers.has(match.id)}
+                            />
+                            {connections[match.id] &&
+                              connections[match.id].user_a_connected &&
+                              connections[match.id].user_b_connected &&
+                              connections[match.id].user_a_paid &&
+                              connections[match.id].user_b_paid && (
+                                <div className="mt-4 p-4 bg-green-50 rounded-xl text-green-800 text-center">
+                                  <div>
+                                    <strong>Contact Info:</strong>
+                                  </div>
+                                  <div>
+                                    Your partner's email: <span className="font-mono">{match.email}</span>
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                          {notConnectedYet && !isUserPaused() && (
+                            <button
+                              className="btn-secondary mt-4"
+                              onClick={() => setShowPauseDialog({ open: true, match })}
+                            >
+                              I don't want to match with {match.name}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )
+                )}
+              </div>
             </div>
-            )}
           </div>
         )}
       </main>
+
+      {showProfileModal && selectedProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-lg w-full relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => setShowProfileModal(false)}
+            >
+              ×
+            </button>
+            <div className="flex flex-col items-center">
+              {/* Only show interests, no name/avatar */}
+              <div className="mt-4 w-full text-center">
+                <span className="font-semibold">Interests:</span>{' '}
+                {selectedProfile.interests && selectedProfile.interests.trim() !== ''
+                  ? selectedProfile.interests
+                  : <span className="text-gray-400 italic">Not specified</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPaymentModal && selectedConnection && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          connectionId={selectedConnection.connection.id}
+          userId={user.id}
+          targetUserName={selectedConnection.targetUserName}
+          onPaymentSuccess={handlePaymentSuccess}
+          onPaymentError={handlePaymentError}
+        />
+      )}
     </div>
   )
 }

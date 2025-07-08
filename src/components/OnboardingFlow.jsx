@@ -4,15 +4,17 @@ import OnboardingStep from './OnboardingStep'
 const OnboardingFlow = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [formData, setFormData] = useState({
-    role: '',
+    roles: [],
     personality: '',
     workStyle: '',
-    motivation: '',
-    cofounderPreference: '',
+    top_motivation: '',
+    cofounder_preference: '',
     startupStage: '',
     age: '',
     industries: [],
   })
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [selectedProfile, setSelectedProfile] = useState(null)
 
   const onboardingQuestions = [
     // 1. Personality Traits (Big Five)
@@ -266,6 +268,65 @@ const OnboardingFlow = ({ onComplete }) => {
           />
         </div>
       </div>
+
+      {showProfileModal && selectedProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-lg w-full relative">
+            <button
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
+              onClick={() => setShowProfileModal(false)}
+            >
+              ×
+            </button>
+            <div className="flex flex-col items-center">
+              <div className="text-6xl mb-4">
+                {selectedProfile.avatar || <span role="img" aria-label="avatar">👤</span>}
+              </div>
+              <h2 className="font-bold text-2xl text-gray-900 mb-1">
+                {selectedProfile.name && selectedProfile.name.trim() !== ''
+                  ? selectedProfile.name
+                  : 'No Name'}
+              </h2>
+              <div className="text-lg text-primary-600 font-semibold mb-2">
+                Sprout Founder
+              </div>
+              <div className="mb-4 text-gray-700 font-medium whitespace-pre-line text-center leading-relaxed">
+                {/* Roles/Strengths */}
+                <div>
+                  <b>Strengths:</b>{' '}
+                  {Array.isArray(selectedProfile.roles) && selectedProfile.roles.length > 0
+                    ? selectedProfile.roles.join(', ')
+                    : <span className="text-gray-400 italic">Not specified</span>}
+                </div>
+
+                {/* Motivation */}
+                <div className="mt-2">
+                  <b>Motivated by:</b>{' '}
+                  {Array.isArray(selectedProfile.motivations) && selectedProfile.motivations.length > 0
+                    ? selectedProfile.motivations.join(', ')
+                    : <span className="text-gray-400 italic">Not specified</span>}
+                </div>
+
+                {/* Availability */}
+                <div className="mt-2">
+                  <b>Availability:</b>{' '}
+                  {selectedProfile.availability && selectedProfile.availability.trim() !== ''
+                    ? selectedProfile.availability
+                    : <span className="text-gray-400 italic">Not specified</span>}
+                </div>
+
+                {/* Industries */}
+                <div className="mt-2">
+                  <b>Industries:</b>{' '}
+                  {Array.isArray(selectedProfile.industries) && selectedProfile.industries.length > 0
+                    ? selectedProfile.industries.join(', ')
+                    : <span className="text-gray-400 italic">Not specified</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ import Header from './components/Header'
 import Login from './components/Login'
 import Signup from './components/Signup'
 import Dashboard from './components/Dashboard'
+import StripeTest from './components/StripeTest'
 import { onAuthStateChange, getCurrentUser, signOut, signUp } from './library/auth.js'
 import { getUserProfile, updateUserProfile } from './library/profiles.js'
 import { createUserFromOnboarding } from './utils/matching.js'
@@ -88,7 +89,7 @@ function App() {
         console.log('User has profile:', profile)
         setUserProfile(profile)
         setUser(prev => ({ ...prev, hasProfile: true }))
-      setAuthState('dashboard')
+    setAuthState('dashboard')
     } else {
         console.log('User has no profile, going to onboarding')
         setAuthState('onboarding')
@@ -138,7 +139,7 @@ function App() {
         }
         setUser(user)
         setUserProfile(profileData)
-        setAuthState('dashboard')
+    setAuthState('dashboard')
       }
     } catch (err) {
       alert(err.message)
@@ -151,17 +152,18 @@ function App() {
     console.log('Sign out button clicked');
     const { error } = await signOut();
     if (error) {
+      alert('Sign out failed: ' + error);
       console.error('Sign out error:', error);
     } else {
-      console.log('Signed out successfully');
-    }
     setUser(null);
     setUserProfile(null);
     setAuthState('welcome');
+      window.location.reload(); // Force reload to clear all state
   }
+  };
 
   const switchToOnboarding = () => setAuthState('onboarding')
-  const switchToSignup = () => setAuthState('signup')
+  const switchToSignup = () => setAuthState('onboarding')
   const switchToLogin = () => setAuthState('login')
 
   // Debug: Show current state
@@ -224,7 +226,7 @@ function App() {
 
   return (
     <div className="app">
-      <Header />
+      <Header onLogout={handleLogout} />
       {redirect}
       <Routes>
         <Route path="/" element={
@@ -255,6 +257,7 @@ function App() {
         <Route path="/login" element={<Login onLogin={handleLogin} onSwitchToSignup={switchToSignup} />} />
         <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={switchToLogin} onboardingData={onboardingData} />} />
         <Route path="/onboarding" element={<OnboardingFlow onComplete={handleOnboardingComplete} />} />
+        <Route path="/stripe-test" element={<StripeTest />} />
         <Route path="/dashboard" element={
           <Dashboard
             user={user}

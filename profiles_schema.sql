@@ -20,12 +20,6 @@ create table public.profiles (
   preferred_role text,
   team_style text,
   cofounder_frustration text,
-  cofounderPreference text,         -- camelCase (if your code uses this)
-  personality text,
-  work_style text,
-  motivation text,
-  cofounder_preference text,        -- snake_case (if your code uses this)
-  startup_stage text,
   avatar text,
   age integer,
   industries text[],

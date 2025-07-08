@@ -1,5 +1,5 @@
-// Sprout Cofounder Matching Algorithm
-// Calculates compatibility scores between two users based on psychology, work style, motivation, and role complementarity
+// Sprout Cofounder Matching Algorithm v2.0
+// Enhanced compatibility scoring with mandatory availability matching
 
 /**
  * Calculate match score between two users
@@ -22,7 +22,7 @@ export function calculateMatchScore(userA, userB) {
     }
   };
 
-  // 1. Check mandatory filters (hard requirements)
+  // 1. MANDATORY FILTERS
   const availabilityCheck = checkAvailabilityCompatibility(userA, userB);
   if (availabilityCheck.disqualified) {
     result.disqualified = true;
@@ -30,16 +30,11 @@ export function calculateMatchScore(userA, userB) {
     return result;
   }
 
-  const communicationCheck = checkCommunicationCompatibility(userA, userB);
-  if (communicationCheck.disqualified) {
-    result.disqualified = true;
-    result.reasons.push(communicationCheck.reason);
-    return result;
-  }
+  // Communication - no disqualification, handled in scoring
 
   // 2. Calculate category scores
-  result.categoryScores.availability = calculateAvailabilityScore(userA, userB);
   result.categoryScores.personality = calculatePersonalityScore(userA, userB);
+  result.categoryScores.availability = calculateAvailabilityScore(userA, userB);
   result.categoryScores.communication = calculateCommunicationScore(userA, userB);
   result.categoryScores.motivation = calculateMotivationScore(userA, userB);
   result.categoryScores.roles = calculateRolesScore(userA, userB);
@@ -51,334 +46,306 @@ export function calculateMatchScore(userA, userB) {
   return result;
 }
 
-// Mandatory Filter Functions
+// MANDATORY FILTERS
 function checkAvailabilityCompatibility(userA, userB) {
   const a = userA.availability;
   const b = userB.availability;
-  const aFlex = userA.availabilityFlexibility;
-  const bFlex = userB.availabilityFlexibility;
 
-  // If both are flexible, they can work together
-  if (aFlex === 'very_flexible' && bFlex === 'very_flexible') {
-    return { disqualified: false };
-  }
-
-  // If one is 'depends', they can adapt
-  if (a === 'depends' || b === 'depends') {
-    return { disqualified: false };
-  }
-
-  // If they have the same availability, they're compatible
-  if (a === b) {
-    return { disqualified: false };
-  }
-
-  // Check for compatible availability pairs (more lenient)
-  const compatiblePairs = [
-    ['10_20', '20_40'],
-    ['20_40', 'full_time'],
-    ['10_20', 'full_time'],
-    ['nights_weekends', '20_40'],
-    ['nights_weekends', 'full_time']
-  ];
-
-  const isCompatible = compatiblePairs.some(([x, y]) => 
-    (a === x && b === y) || (a === y && b === x)
-  );
-
-  if (isCompatible) {
-    return { disqualified: false };
-  }
-
-  // Only disqualify if truly incompatible
-  return { 
-    disqualified: true, 
-    reason: `Availability mismatch: ${a} vs ${b} - incompatible availability preferences` 
-  };
-}
-
-function checkCommunicationCompatibility(userA, userB) {
-  const a = userA.communication;
-  const b = userB.communication;
-
-  // If either is 'depends', they can adapt
-  if (a === 'depends' || b === 'depends') {
-    return { disqualified: false };
-  }
-
-  // If they're the same, they're compatible
-  if (a === b) {
-    return { disqualified: false };
-  }
-
-  // Check for compatible pairs
-  const compatiblePairs = [
-    ['async', 'weekly_sync'],
-    ['weekly_sync', 'async']
-  ];
-
-  const isCompatible = compatiblePairs.some(([x, y]) => 
-    (a === x && b === y) || (a === y && b === x)
-  );
-
-  if (!isCompatible) {
+  // STRICT REQUIREMENT: Availability must be an exact match
+  if (a !== b) {
     return { 
       disqualified: true, 
-      reason: 'Communication style mismatch: incompatible communication preferences' 
+      reason: `Availability mismatch: ${a} vs ${b} - exact match required` 
     };
   }
 
   return { disqualified: false };
 }
 
-// Scoring Functions
-function calculateAvailabilityScore(userA, userB) {
-  const a = userA.availability;
-  const b = userB.availability;
-  const aFlex = userA.availabilityFlexibility;
-  const bFlex = userB.availabilityFlexibility;
-
-  // If both are flexible or one is 'depends', full points
-  if (aFlex === 'very_flexible' && bFlex === 'very_flexible') {
-    return 15;
-  }
-  if (a === 'depends' || b === 'depends') {
-    return 15;
-  }
-
-  // If they have overlapping availability, full points
-  if (a === b) {
-    return 15;
-  }
-
-  // Check for compatible availability pairs
-  const compatiblePairs = [
-    ['10_20', '20_40'],
-    ['20_40', 'full_time'],
-    ['10_20', 'full_time'],
-    ['nights_weekends', '20_40'],
-    ['nights_weekends', 'full_time']
-  ];
-
-  const isCompatible = compatiblePairs.some(([x, y]) => 
-    (a === x && b === y) || (a === y && b === x)
-  );
-
-  return isCompatible ? 10 : 0;
-}
+// ENHANCED SCORING FUNCTIONS
 
 function calculatePersonalityScore(userA, userB) {
-  let score = 0;
   const a = userA.personality;
   const b = userB.personality;
 
-  // +5 if openness and conscientiousness are complementary (one high, one medium+)
-  const aOpenness = a.openness;
-  const bOpenness = b.openness;
-  const aConscientiousness = a.conscientiousness;
-  const bConscientiousness = b.conscientiousness;
-  
-  const aHighOpenness = aOpenness >= 4;
-  const bHighOpenness = bOpenness >= 4;
-  const aMediumPlusConscientiousness = aConscientiousness >= 3;
-  const bMediumPlusConscientiousness = bConscientiousness >= 3;
-  
-  if ((aHighOpenness && bMediumPlusConscientiousness) || (bHighOpenness && aMediumPlusConscientiousness)) {
-    score += 5;
+  // Weighted distance scoring: score = (1 - |traitA - traitB| / 5) * weight
+  const weights = {
+    conscientiousness: 8,
+    agreeableness: 5,
+    openness: 4,
+    extraversion: 2,
+    neuroticism: 1
+  };
+
+  let totalScore = 0;
+
+  // Calculate weighted distance for each trait
+  Object.keys(weights).forEach(trait => {
+    const traitA = a[trait];
+    const traitB = b[trait];
+    const weight = weights[trait];
+    
+    const distance = Math.abs(traitA - traitB);
+    const traitScore = (1 - distance / 5) * weight;
+    
+    totalScore += Math.max(0, traitScore); // Ensure no negative scores
+  });
+
+  return Math.min(totalScore, 20); // Cap at 20 points
+}
+
+function calculateAvailabilityScore(userA, userB) {
+  let score = 15; // Base score for exact availability match
+
+  // Bonus for flexibility
+  const aFlex = userA.availabilityFlexibility;
+  const bFlex = userB.availabilityFlexibility;
+
+  if (aFlex === 'very_flexible' || bFlex === 'very_flexible') {
+    score += 2;
+  } else if (aFlex === 'slightly_flexible' || bFlex === 'slightly_flexible') {
+    score += 1;
   }
 
-  // +5 if extraversion + introversion pairing (one 4–5, one 1–2)
-  const aExtraversion = a.extraversion;
-  const bExtraversion = b.extraversion;
-  const aExtrovert = aExtraversion >= 4;
-  const bExtrovert = bExtraversion >= 4;
-  const aIntrovert = aExtraversion <= 2;
-  const bIntrovert = bExtraversion <= 2;
-  
-  if ((aExtrovert && bIntrovert) || (bExtrovert && aIntrovert)) {
-    score += 5;
+  // Chronotype compatibility
+  const aChrono = userA.chronotype;
+  const bChrono = userB.chronotype;
+
+  if (aChrono === bChrono) {
+    score += 2; // Same chronotype
+  } else if ((aChrono === 'morning' && bChrono === 'night') || 
+             (aChrono === 'night' && bChrono === 'morning')) {
+    score -= 2; // Opposite ends
   }
 
-  // +5 for moderate agreeableness mix (both 3–4)
-  const aAgreeableness = a.agreeableness;
-  const bAgreeableness = b.agreeableness;
-  const aModerateAgreeable = aAgreeableness >= 3 && aAgreeableness <= 4;
-  const bModerateAgreeable = bAgreeableness >= 3 && bAgreeableness <= 4;
-  
-  if (aModerateAgreeable && bModerateAgreeable) {
-    score += 5;
-  }
-
-  // +5 if one low neuroticism (1–2) and one moderate (3–4)
-  const aNeuroticism = a.neuroticism;
-  const bNeuroticism = b.neuroticism;
-  const aLowNeuroticism = aNeuroticism <= 2;
-  const bLowNeuroticism = bNeuroticism <= 2;
-  const aModerateNeuroticism = aNeuroticism >= 3 && aNeuroticism <= 4;
-  const bModerateNeuroticism = bNeuroticism >= 3 && bNeuroticism <= 4;
-  
-  if ((aLowNeuroticism && bModerateNeuroticism) || (bLowNeuroticism && aModerateNeuroticism)) {
-    score += 5;
-  }
-
-  return score;
+  return Math.min(score, 15); // Cap at 15 points
 }
 
 function calculateCommunicationScore(userA, userB) {
   const a = userA.communication;
   const b = userB.communication;
 
-  // +10 if same or one is 'depends'
-  if (a === b || a === 'depends' || b === 'depends') {
-    return 10;
-  }
+  // Communication compatibility matrix
+  const compatibilityMatrix = {
+    'async': {
+      'async': 10,
+      'weekly_sync': 8,
+      'daily_checkin': 5,
+      'depends': 7
+    },
+    'weekly_sync': {
+      'async': 8,
+      'weekly_sync': 10,
+      'daily_checkin': 7,
+      'depends': 7
+    },
+    'daily_checkin': {
+      'async': 5,
+      'weekly_sync': 7,
+      'daily_checkin': 10,
+      'depends': 7
+    },
+    'depends': {
+      'async': 7,
+      'weekly_sync': 7,
+      'daily_checkin': 7,
+      'depends': 7
+    }
+  };
 
-  // +5 if one is 'weekly' and the other is 'async'
-  const compatiblePairs = [
-    ['async', 'weekly_sync'],
-    ['weekly_sync', 'async']
-  ];
-
-  const isCompatible = compatiblePairs.some(([x, y]) => 
-    (a === x && b === y) || (a === y && b === x)
-  );
-
-  return isCompatible ? 5 : 0;
+  return compatibilityMatrix[a]?.[b] || 5; // Default to 5 if not found
 }
 
 function calculateMotivationScore(userA, userB) {
   let score = 0;
 
-  // +5 for each shared motivation
-  const sharedMotivations = userA.motivations.filter(motivation => 
-    userB.motivations.includes(motivation)
-  );
-  score += sharedMotivations.length * 5;
-
-  // +5 bonus if topMotivation is the same
+  // Top motivation match = +10
   if (userA.topMotivation === userB.topMotivation) {
-    score += 5;
+    score += 10;
   }
 
-  return Math.min(score, 20); // Cap at 20 points
+  // Shared secondary motivations = +2 each
+  const sharedMotivations = userA.motivations.filter(motivation => 
+    userB.motivations.includes(motivation) && motivation !== userA.topMotivation
+  );
+  score += sharedMotivations.length * 2;
+
+  // Conflicting values penalty = -5
+  const conflictingPairs = [
+    ['wealth', 'impact'],
+    ['freedom', 'collaboration']
+  ];
+
+  const hasConflict = conflictingPairs.some(([val1, val2]) => {
+    const aHasVal1 = userA.motivations.includes(val1) || userA.topMotivation === val1;
+    const bHasVal2 = userB.motivations.includes(val2) || userB.topMotivation === val2;
+    const aHasVal2 = userA.motivations.includes(val2) || userA.topMotivation === val2;
+    const bHasVal1 = userB.motivations.includes(val1) || userB.topMotivation === val1;
+    
+    return (aHasVal1 && bHasVal2) || (aHasVal2 && bHasVal1);
+  });
+
+  if (hasConflict) {
+    score -= 5;
+  }
+
+  return Math.min(Math.max(score, 0), 20); // Between 0 and 20
 }
 
 function calculateRolesScore(userA, userB) {
-  let score = 0;
+  // Convert roles to lowercase for comparison
+  const aRoles = userA.roles.map(role => role.toLowerCase());
+  const bRoles = userB.roles.map(role => role.toLowerCase());
 
-  // +10 if roles are complementary (e.g., technical + business, visionary + operator)
+  // Complementary role pairs
   const complementaryPairs = [
     ['technical', 'business'],
     ['technical', 'marketing'],
     ['technical', 'sales'],
     ['visionary', 'operator'],
     ['designer', 'technical'],
+    ['designer/ux', 'technical'],
+    ['designer/ux', 'visionary'],
     ['marketer', 'technical'],
-    ['sales', 'technical']
+    ['sales', 'technical'],
+    ['sales', 'visionary'],
+    ['marketer', 'visionary']
   ];
 
+  // Check for complementary roles
   const hasComplementaryRoles = complementaryPairs.some(([role1, role2]) => {
-    const aHasRole1 = userA.roles.includes(role1);
-    const bHasRole2 = userB.roles.includes(role2);
-    const aHasRole2 = userA.roles.includes(role2);
-    const bHasRole1 = userB.roles.includes(role1);
+    const aHasRole1 = aRoles.includes(role1);
+    const bHasRole2 = bRoles.includes(role2);
+    const aHasRole2 = aRoles.includes(role2);
+    const bHasRole1 = bRoles.includes(role1);
     
     return (aHasRole1 && bHasRole2) || (aHasRole2 && bHasRole1);
   });
 
   if (hasComplementaryRoles) {
-    score += 10;
+    return 25; // Perfect role complementarity
   }
 
-  // +10 if preferred roles are not the same
-  if (userA.preferredRole !== userB.preferredRole) {
-    score += 10;
+  // Check for shared roles
+  const sharedRoles = aRoles.filter(role => bRoles.includes(role));
+  if (sharedRoles.length > 0) {
+    return 12; // Shared roles
   }
 
-  // +5 bonus if one user is generalist
-  if (userA.roles.includes('generalist') || userB.roles.includes('generalist')) {
-    score += 5;
-  }
-
-  return Math.min(score, 25); // Cap at 25 points
+  return 5; // No synergy
 }
 
 function calculateConflictStyleScore(userA, userB) {
   const a = userA.conflictStyle;
   const b = userB.conflictStyle;
 
-  // +10 if conflict styles are matched or form a compatible pair
-  if (a === b) {
-    return 10;
-  }
+  // Conflict style compatibility matrix
+  const conflictMatrix = {
+    'direct': {
+      'direct': 9,
+      'indirect': 7,
+      'avoidant': 2,
+      'internalize': 2
+    },
+    'indirect': {
+      'direct': 7,
+      'indirect': 6,
+      'avoidant': 5,
+      'internalize': 5
+    },
+    'avoidant': {
+      'direct': 2,
+      'indirect': 5,
+      'avoidant': 3,
+      'internalize': 3
+    },
+    'internalize': {
+      'direct': 2,
+      'indirect': 5,
+      'avoidant': 3,
+      'internalize': 3
+    }
+  };
 
-  // Compatible pairs (e.g., direct + indirect, avoidant + internalize)
-  const compatiblePairs = [
-    ['direct', 'indirect'],
-    ['indirect', 'direct'],
-    ['avoidant', 'internalize'],
-    ['internalize', 'avoidant']
-  ];
-
-  const isCompatible = compatiblePairs.some(([x, y]) => 
-    (a === x && b === y) || (a === y && b === x)
-  );
-
-  if (isCompatible) {
-    return 10;
-  }
-
-  // +5 if both are moderate (e.g., indirect + indirect)
-  return 5;
+  return conflictMatrix[a]?.[b] || 5; // Default to 5 if not found
 }
 
-// Helper function to get match quality description
+// Enhanced match quality function
 export function getMatchQuality(score) {
-  if (score >= 90) return { quality: 'Exceptional', color: 'text-green-600', bgColor: 'bg-green-100' };
-  if (score >= 80) return { quality: 'Excellent', color: 'text-blue-600', bgColor: 'bg-blue-100' };
-  if (score >= 70) return { quality: 'Good', color: 'text-yellow-600', bgColor: 'bg-yellow-100' };
-  if (score >= 60) return { quality: 'Fair', color: 'text-orange-600', bgColor: 'bg-orange-100' };
-  return { quality: 'Poor', color: 'text-red-600', bgColor: 'bg-red-100' };
+  if (score >= 90) return { 
+    quality: 'Excellent Match', 
+    emoji: '🌟',
+    color: 'text-green-600', 
+    bgColor: 'bg-green-100' 
+  };
+  if (score >= 80) return { 
+    quality: 'Strong Match', 
+    emoji: '✅',
+    color: 'text-blue-600', 
+    bgColor: 'bg-blue-100' 
+  };
+  if (score >= 70) return { 
+    quality: 'Good Match', 
+    emoji: '👍',
+    color: 'text-yellow-600', 
+    bgColor: 'bg-yellow-100' 
+  };
+  if (score >= 60) return { 
+    quality: 'Fair Match', 
+    emoji: '⚠️',
+    color: 'text-orange-600', 
+    bgColor: 'bg-orange-100' 
+  };
+  return { 
+    quality: 'Poor Match', 
+    emoji: '❌',
+    color: 'text-red-600', 
+    bgColor: 'bg-red-100' 
+  };
 }
 
 // Helper function to get category descriptions
 export function getCategoryDescription(category, score) {
   const descriptions = {
     personality: {
-      20: 'Perfect psychological complementarity',
-      15: 'Strong personality balance',
+      20: 'Perfect psychological alignment',
+      15: 'Strong personality compatibility',
       10: 'Good personality fit',
       5: 'Some personality alignment',
       0: 'Personality mismatch'
     },
     availability: {
       15: 'Perfect availability match',
+      12: 'Good availability with flexibility',
       10: 'Compatible schedules',
-      0: 'Availability conflict'
+      5: 'Basic availability compatibility',
+      0: 'Availability issues'
     },
     communication: {
       10: 'Communication styles align perfectly',
-      5: 'Compatible communication preferences',
+      8: 'Highly compatible communication',
+      7: 'Good communication compatibility',
+      5: 'Moderate communication fit',
       0: 'Communication style mismatch'
     },
     motivation: {
-      20: 'Shared core motivations',
-      15: 'Good motivation alignment',
-      10: 'Some shared motivations',
-      5: 'Limited motivation overlap',
-      0: 'Different motivations'
+      20: 'Shared core motivations and values',
+      15: 'Strong motivation alignment',
+      10: 'Good motivation compatibility',
+      5: 'Some shared motivations',
+      0: 'Different core motivations'
     },
     roles: {
       25: 'Perfect role complementarity',
-      20: 'Strong role fit',
-      15: 'Good role alignment',
-      10: 'Some role complementarity',
-      5: 'Limited role fit',
+      12: 'Shared role strengths',
+      5: 'Limited role synergy',
       0: 'Role conflict'
     },
     conflictStyle: {
       10: 'Compatible conflict resolution',
+      7: 'Good conflict handling',
       5: 'Moderate conflict compatibility',
+      2: 'Potential conflict issues',
       0: 'Conflict style mismatch'
     }
   };
@@ -389,6 +356,82 @@ export function getCategoryDescription(category, score) {
     .reduce((prev, curr) => Math.abs(curr - score) < Math.abs(prev - score) ? curr : prev);
 
   return descriptions[category][closestScore];
+}
+
+// Helper function to create a user from onboarding form data
+export function createUserFromOnboarding(userId, formData) {
+  return {
+    id: userId,
+    personality: {
+      openness: formData.openness || 3,
+      conscientiousness: formData.conscientiousness || 3,
+      extraversion: formData.extraversion || 3,
+      agreeableness: formData.agreeableness || 3,
+      neuroticism: formData.neuroticism || 3
+    },
+    conflictStyle: mapConflictStyle(formData.conflict_style),
+    availability: mapAvailability(formData.availability),
+    availabilityFlexibility: mapFlexibility(formData.availability_flexibility),
+    chronotype: mapChronotype(formData.chronotype),
+    communication: mapCommunication(formData.communication),
+    motivations: formData.motivations || [],
+    topMotivation: formData.top_motivation || '',
+    roles: formData.roles || [],
+    preferredRole: formData.preferred_role || '',
+    teamStyle: formData.team_style || '',
+    cofounderFrustration: formData.cofounder_frustration || ''
+  };
+}
+
+// Mapping functions for onboarding form data
+export function mapConflictStyle(conflictStyle) {
+  const mapping = {
+    'I prefer to address it directly and resolve it quickly.': 'direct',
+    'I bring it up gently, usually after thinking it through.': 'indirect',
+    'I try to avoid confrontation and hope it resolves.': 'avoidant',
+    'I usually internalize it unless it becomes urgent.': 'internalize'
+  };
+  return mapping[conflictStyle] || 'indirect';
+}
+
+export function mapAvailability(availability) {
+  const mapping = {
+    'Nights/weekends only': 'nights_weekends',
+    '10–20 hrs/week': '10_20',
+    '20–40 hrs/week': '20_40',
+    'Full-time': 'full_time',
+    'Depends on the match': 'depends'
+  };
+  return mapping[availability] || 'depends';
+}
+
+export function mapFlexibility(flexibility) {
+  const mapping = {
+    'Very rigid': 'rigid',
+    'Slightly flexible': 'slightly_flexible',
+    'Very flexible': 'very_flexible'
+  };
+  return mapping[flexibility] || 'slightly_flexible';
+}
+
+export function mapChronotype(chronotype) {
+  const mapping = {
+    'Early morning (5am–10am)': 'morning',
+    'Midday (11am–4pm)': 'midday',
+    'Evening/Night (5pm–2am)': 'night',
+    'Flexible throughout the day': 'flexible'
+  };
+  return mapping[chronotype] || 'flexible';
+}
+
+export function mapCommunication(communication) {
+  const mapping = {
+    'Async-first': 'async',
+    'Weekly syncs/check-ins': 'weekly_sync',
+    'Daily check-ins and active messaging': 'daily_checkin',
+    'Depends on the team': 'depends'
+  };
+  return mapping[communication] || 'depends';
 }
 
 // Test function to demonstrate the matching algorithm
@@ -544,80 +587,4 @@ export function testMatchingAlgorithm() {
     matchBC,
     matchAD
   };
-}
-
-// Helper function to create a user from onboarding form data
-export function createUserFromOnboarding(userId, formData) {
-  return {
-    id: userId,
-    personality: {
-      openness: formData.openness || 3,
-      conscientiousness: formData.conscientiousness || 3,
-      extraversion: formData.extraversion || 3,
-      agreeableness: formData.agreeableness || 3,
-      neuroticism: formData.neuroticism || 3
-    },
-    conflictStyle: mapConflictStyle(formData.conflict_style),
-    availability: mapAvailability(formData.availability),
-    availabilityFlexibility: mapFlexibility(formData.availability_flexibility),
-    chronotype: mapChronotype(formData.chronotype),
-    communication: mapCommunication(formData.communication),
-    motivations: formData.motivations || [],
-    topMotivation: formData.top_motivation || '',
-    roles: formData.roles || [],
-    preferredRole: formData.preferred_role || '',
-    teamStyle: formData.team_style || '',
-    cofounderFrustration: formData.cofounder_frustration || ''
-  };
-}
-
-// Mapping functions for onboarding form data
-function mapConflictStyle(conflictStyle) {
-  const mapping = {
-    'I prefer to address it directly and resolve it quickly.': 'direct',
-    'I bring it up gently, usually after thinking it through.': 'indirect',
-    'I try to avoid confrontation and hope it resolves.': 'avoidant',
-    'I usually internalize it unless it becomes urgent.': 'internalize'
-  };
-  return mapping[conflictStyle] || 'indirect';
-}
-
-function mapAvailability(availability) {
-  const mapping = {
-    'Nights/weekends only': 'nights_weekends',
-    '10–20 hrs/week': '10_20',
-    '20–40 hrs/week': '20_40',
-    'Full-time': 'full_time',
-    'Depends on the match': 'depends'
-  };
-  return mapping[availability] || 'depends';
-}
-
-function mapFlexibility(flexibility) {
-  const mapping = {
-    'Very rigid': 'rigid',
-    'Slightly flexible': 'slightly_flexible',
-    'Very flexible': 'very_flexible'
-  };
-  return mapping[flexibility] || 'slightly_flexible';
-}
-
-function mapChronotype(chronotype) {
-  const mapping = {
-    'Early morning (5am–10am)': 'morning',
-    'Midday (11am–4pm)': 'midday',
-    'Evening/Night (5pm–2am)': 'night',
-    'Flexible throughout the day': 'flexible'
-  };
-  return mapping[chronotype] || 'flexible';
-}
-
-function mapCommunication(communication) {
-  const mapping = {
-    'Async-first': 'async',
-    'Weekly syncs/check-ins': 'weekly_sync',
-    'Daily check-ins and active messaging': 'daily_checkin',
-    'Depends on the team': 'depends'
-  };
-  return mapping[communication] || 'depends';
 } 

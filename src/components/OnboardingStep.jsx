@@ -2,10 +2,14 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from "../library/supabase"
 
 const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formData }) => {
-  const [selectedValue, setSelectedValue] = useState(formData[step.id] || (step.type === 'multi_select' ? [] : ''));
+  const [selectedValue, setSelectedValue] = useState(
+    formData[step.id] || (step.type === 'multi_select' ? [] : (step.type === 'scale' ? 3 : ''))
+  );
 
   useEffect(() => {
-    setSelectedValue(formData[step.id] || (step.type === 'multi_select' ? [] : ''));
+    setSelectedValue(
+      formData[step.id] || (step.type === 'multi_select' ? [] : (step.type === 'scale' ? 3 : ''))
+    );
   }, [step, formData]);
 
   const handleOptionSelect = (value) => {
@@ -20,6 +24,8 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
         newValue = selectedValue; // Don't add more than the limit
       }
       setSelectedValue(newValue);
+    } else if (isLastStep && step.type === 'single_choice') {
+      setSelectedValue(value); // Only select, do not auto-continue
     } else {
       setSelectedValue(value);
       onComplete(step.id, value);
@@ -49,14 +55,33 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
       </div>
 
       {/* Render based on type */}
-      {step.type === 'scale' && (
+      {step.id === 'age' ? (
+        <div className="flex flex-col items-center">
+          <input
+            type="number"
+            min={16}
+            max={80}
+            value={selectedValue}
+            onChange={e => setSelectedValue(e.target.value)}
+            placeholder="Enter your age"
+            className="w-1/2 p-3 border-2 border-gray-200 rounded-xl text-center text-2xl font-bold focus:border-primary-400 focus:outline-none"
+          />
+          <button
+            className="btn-primary mt-6"
+            onClick={handleNext}
+            disabled={selectedValue === '' || isNaN(Number(selectedValue)) || Number(selectedValue) < 16 || Number(selectedValue) > 80}
+          >
+            Next
+          </button>
+        </div>
+      ) : step.type === 'scale' && (
         <div className="flex flex-col items-center">
           <input
             type="range"
             min={1}
             max={6}
             step={1}
-            value={selectedValue || 3}
+            value={selectedValue}
             onChange={(e) => setSelectedValue(Number(e.target.value))}
             className="w-2/3"
           />
@@ -75,13 +100,14 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
         </div>
       )}
 
-      {step.type === 'single_choice' && (
+      {step.type === 'single_choice' && step.id !== 'age' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {step.options.map((option) => (
             <button
               key={option}
               className={`group bg-white border-2 rounded-2xl p-6 text-left transition-all duration-300 transform ${selectedValue === option ? 'border-primary-400 shadow-xl' : 'border-gray-200 hover:border-primary-400 hover:shadow-xl hover:-translate-y-1'}`}
               onClick={() => handleOptionSelect(option)}
+              type="button"
             >
               <div className="flex items-start space-x-4">
                 <div className="flex-1">
@@ -127,6 +153,7 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
           <button 
             className="bg-[#22c177] text-white text-xl font-bold py-4 px-12 rounded-2xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300 hover:bg-[#1ea366]"
             onClick={handleLetsSprout}
+            disabled={selectedValue === ''}
           >
             🌱 Let's Sprout! 
           </button>

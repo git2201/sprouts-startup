@@ -70,13 +70,13 @@ const Signup = ({ onSignup, onSwitchToLogin, onboardingData }) => {
       return
     }
     // Only pass signup data up
-    onSignup({
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
+      onSignup({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
       password: formData.password
-    })
-    setIsLoading(false)
+      })
+      setIsLoading(false)
   }
 
   return (

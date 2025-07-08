@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn } from '../library/auth.js'
+import { signIn, signOut } from '../library/auth.js'
 
 const Login = ({ onLogin, onSwitchToSignup }) => {
   const navigate = useNavigate()
@@ -46,14 +46,20 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
 
     try {
       const { user, error } = await signIn(formData.email, formData.password)
-      
       if (error) {
-        setErrors({ email: error })
+        if (error.toLowerCase().includes('invalid refresh token') || error.toLowerCase().includes('refresh token not found')) {
+          await signOut()
+          localStorage.clear()
+          sessionStorage.clear()
+          setErrors({ email: 'Session expired or invalid. Please log in again.' })
+        } else {
+          setErrors({ email: error })
+        }
       } else if (user) {
         onLogin({
           id: user.id,
           email: user.email,
-          name: user.user_metadata?.name || user.email.split('@')[0],
+          name: user.user_metadata?.name || user.user_metadata?.user_name || user.email.split('@')[0],
           hasProfile: false
         })
         // The App.jsx will handle the redirect based on user profile

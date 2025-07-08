@@ -1,5 +1,8 @@
 import { supabase } from './supabase'
-import { calculateMatchScore, getMatchQuality } from '../utils/matching.js'
+import { calculateMatchScore, getMatchQuality, 
+  // Import mapping functions for robust backend mapping
+  mapConflictStyle, mapAvailability, mapFlexibility, mapChronotype, mapCommunication 
+} from '../utils/matching.js'
 
 // Get all user profiles from database
 export async function getAllUserProfiles() {
@@ -38,11 +41,12 @@ function convertProfileToUserFormat(profile) {
       agreeableness: profile.agreeableness || 3,
       neuroticism: profile.neuroticism || 3
     },
-    conflictStyle: profile.conflict_style || 'indirect',
-    availability: profile.availability || 'depends',
-    availabilityFlexibility: profile.availability_flexibility || 'slightly_flexible',
-    chronotype: profile.chronotype || 'flexible',
-    communication: profile.communication || 'depends',
+    // Use mapping functions for robustness
+    conflictStyle: mapConflictStyle(profile.conflict_style),
+    availability: mapAvailability(profile.availability),
+    availabilityFlexibility: mapFlexibility(profile.availability_flexibility),
+    chronotype: mapChronotype(profile.chronotype),
+    communication: mapCommunication(profile.communication),
     motivations: profile.motivations || [],
     topMotivation: profile.top_motivation || '',
     roles: Array.isArray(profile.roles)
@@ -64,7 +68,6 @@ export async function findMatchesForUser(userId, limit = 5) {
   try {
     // Get all profiles except the current user
     const { profiles: allProfiles, error } = await getAllUserProfiles()
-    
     if (error) {
       return { matches: [], error }
     }
@@ -77,20 +80,20 @@ export async function findMatchesForUser(userId, limit = 5) {
 
     // Convert current user to matching format
     const currentUser = convertProfileToUserFormat(currentUserProfile)
-    
+
     // Calculate matches with all other users
     const matches = []
-    
+    const now = new Date()
     for (const profile of allProfiles) {
       if (profile.id === userId) continue // Skip self
-      
+      // Exclude paused users
+      if (profile.pause_until && new Date(profile.pause_until) > now) continue
       const otherUser = convertProfileToUserFormat(profile)
       const matchResult = calculateMatchScore(currentUser, otherUser)
-      
-      console.log('Comparing:', currentUser, otherUser);
-      console.log('Match result:', matchResult);
-      
-      if (!matchResult.disqualified) {
+      // Debug log: print match score for each match
+      console.log(`Match with ${profile.name}: score = ${matchResult.score}`)
+      // Only include matches that are not disqualified AND have a score of 80 or higher
+      if (!matchResult.disqualified && matchResult.score >= 80) {
         matches.push({
           id: profile.id,
           name: profile.name || profile.email?.split('@')[0] || 'Anonymous',
@@ -100,25 +103,23 @@ export async function findMatchesForUser(userId, limit = 5) {
           categoryScores: matchResult.categoryScores,
           quality: getMatchQuality(matchResult.score).quality,
           profile: {
-            roles: profile.roles || [],
-            motivations: profile.motivations || [],
-            industries: profile.industries || [],
+            roles: Array.isArray(profile.roles) ? profile.roles : [],
+            motivations: Array.isArray(profile.motivations) ? profile.motivations : [],
+            industries: Array.isArray(profile.industries) ? profile.industries : [],
             work_style: profile.work_style || 'Not specified',
-            motivation: profile.motivation || profile.top_motivation || 'Not specified',
+            motivation: (Array.isArray(profile.motivations) && profile.motivations.length > 0) ? profile.motivations.join(', ') : (profile.top_motivation || 'Not specified'),
             cofounder_preference: profile.cofounder_preference || 'Not specified',
             startup_stage: profile.startup_stage || 'Not specified',
             availability: profile.availability || 'Not specified',
             communication: profile.communication || 'Not specified',
-            interests: profile.interests || '',
+            interests: profile.interests || 'Not specified',
           }
         })
       }
     }
-    
     // Sort by match score (highest first) and limit results
     matches.sort((a, b) => b.matchScore - a.matchScore)
     const topMatches = matches.slice(0, limit)
-    
     return { matches: topMatches, error: null }
   } catch (error) {
     console.error('Error finding matches:', error)
