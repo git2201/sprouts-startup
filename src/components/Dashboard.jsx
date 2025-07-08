@@ -68,14 +68,25 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
       setError(null)
       try {
         // Load matches for current user
-        const { matches: userMatches, error: matchesError } = await findMatchesForUser(user.id, 6)
+        const { matches: userMatches, error: matchesError } = await findMatchesForUser(user.id, 1)
         console.log('findMatchesForUser result:', userMatches, matchesError);
+        // Debug: print all matches and their scores
+        if (userMatches) {
+          console.log('Matches:', userMatches.map(m => ({ name: m.name, score: m.matchScore })));
+        }
         if (matchesError) {
           console.error('Error loading matches:', matchesError)
           setError('Failed to load matches')
         } else {
           setMatches(userMatches)
-          
+          // Automatically create a connection for each match shown
+          userMatches.forEach(async (match) => {
+            try {
+              await requestConnection(user.id, match.id);
+            } catch (err) {
+              console.error('Failed to create connection for match', match.id, err);
+            }
+          });
           // Load connection statuses for all matches
           const connectionStatuses = {}
           for (const match of userMatches) {
@@ -139,13 +150,30 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
           setTimeout(() => setSuccessMessage(''), 3000)
         }
       } else {
+        // Handle session expiration errors
+        if (result.error && (result.error.toLowerCase().includes('invalid refresh token') || result.error.toLowerCase().includes('refresh token not found'))) {
+          // Log out, clear storage, and prompt re-login
+          if (typeof localStorage !== 'undefined') localStorage.clear();
+          if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+          if (typeof window !== 'undefined') window.location.reload();
+          setError('Session expired or invalid. Please log in again.');
+        } else {
         setError(result.error)
         setTimeout(() => setError(null), 5000)
+        }
       }
     } catch (err) {
+      // Handle session expiration errors
+      if (err.message && (err.message.toLowerCase().includes('invalid refresh token') || err.message.toLowerCase().includes('refresh token not found'))) {
+        if (typeof localStorage !== 'undefined') localStorage.clear();
+        if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
+        if (typeof window !== 'undefined') window.location.reload();
+        setError('Session expired or invalid. Please log in again.');
+      } else {
       console.error('Error requesting connection:', err)
       setError('Failed to send connection request')
       setTimeout(() => setError(null), 5000)
+      }
     } finally {
       setConnectingUsers(prev => {
         const newSet = new Set(prev)
@@ -385,18 +413,25 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
 
   // Handler for pause and remove match
   const handlePauseAndRemoveMatch = async (targetUserId, targetUserName) => {
-    // Set pause until 36 hours from now
-    const pauseUntilDate = new Date(Date.now() + 36 * 60 * 60 * 1000).toISOString();
+    // Set pause until 100 years from now (effectively never)
+    const pauseUntilDate = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
     // Update user profile with pause_until
     await updateUserProfile(user.id, { ...userProfile, pause_until: pauseUntilDate });
     setPauseUntil(pauseUntilDate);
     // Remove the match/connection
     await deleteConnection(user.id, targetUserId);
-    setSuccessMessage(`You have been paused from matching for 36 hours. You can match again after ${new Date(pauseUntilDate).toLocaleString()}.`);
+    setSuccessMessage(`You have been permanently removed from the matching pool. If this was a mistake, please contact support.`);
     setShowPauseDialog({ open: false, match: null });
     // Optionally, refresh matches
     const { matches: userMatches } = await findMatchesForUser(user.id, 6);
     setMatches(userMatches);
+    // --- NEW: Refresh matches for the other user (put them back in the pool) ---
+    try {
+      const { matches: targetUserMatches } = await findMatchesForUser(targetUserId, 6);
+      console.log(`Refreshed matches for user ${targetUserId}:`, targetUserMatches);
+    } catch (err) {
+      console.error('Error refreshing matches for the other user:', err);
+    }
   }
 
   return (
@@ -501,9 +536,10 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
           <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative">
             <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowPauseDialog({ open: false, match: null })}>&times;</button>
             <h2 className="text-xl font-bold mb-4">Are you sure?</h2>
-            <p className="mb-4">If you choose not to match with <b>{showPauseDialog.match?.name}</b>, you will be removed from the matching pool for 36 hours. <br/>You can match again after that. <br/>Are you sure you want to continue?</p>
+            <p className="mb-4 text-red-600 font-semibold">Warning: This will permanently remove you from the matching pool. You will need to contact support to rejoin in the future.</p>
+            <p className="mb-4">If you choose not to match with <b>{showPauseDialog.match?.name}</b>, you will be removed from the matching pool forever.<br/>Are you sure you want to continue?</p>
             <div className="flex space-x-4">
-              <button className="btn-primary" onClick={() => handlePauseAndRemoveMatch(showPauseDialog.match.id, showPauseDialog.match.name)}>Yes, remove and pause me</button>
+              <button className="btn-primary" onClick={() => { handlePauseAndRemoveMatch(showPauseDialog.match.id, showPauseDialog.match.name); setShowPauseDialog({ open: false, match: null }); }}>Yes, remove and pause me</button>
               <button className="btn-secondary" onClick={() => setShowPauseDialog({ open: false, match: null })}>Cancel</button>
             </div>
           </div>
@@ -630,7 +666,7 @@ Let's build something great together! 🚀`;
                     <div className="text-6xl mb-6">⏳</div>
                     <h3 className="text-2xl font-bold text-gray-900 mb-4">You have been paused from matching</h3>
                     <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                      You can continue matching after 36 hours.<br/>
+                      You can continue matching after 1 hour.<br/>
                       {userProfile?.pause_until && (
                         <span className="block mt-2 text-green-600 font-semibold">Resume: {new Date(userProfile.pause_until).toLocaleString()}</span>
                       )}
@@ -681,7 +717,6 @@ Let's build something great together! 🚀`;
                       // Debug log: print the match score received from backend
                       console.log(`Frontend displaying match for ${match.name}: matchScore =`, match.matchScore);
                       const connection = connections[match.id];
-                      const notConnectedYet = !connection || (!connection.user_a_connected && !connection.user_b_connected);
                       return (
                         <div
                           key={match.id}
@@ -750,18 +785,35 @@ Let's build something great together! 🚀`;
                               </span>
                             </div>
                           </div>
-                          {!((Array.isArray(match.profile.roles) && match.profile.roles.length > 0) || match.profile.role || match.profile.motivation || match.profile.startup_stage || (match.profile.interests && match.profile.interests.trim() !== '')) && (
-                            <div className="text-gray-400 italic">No details provided yet.</div>
-                          )}
-                          <div className="mt-6 flex space-x-3 w-full">
-                            <ConnectionStatus
-                              connection={connections[match.id]}
-                              currentUserId={user.id}
-                              targetUserName={match.name}
-                              onConnect={() => handleConnect(match.id, match.name)}
-                              onPayment={() => handlePayment(connections[match.id], match.name)}
-                              isLoading={connectingUsers.has(match.id)}
-                            />
+                          {/* Show Pay button directly, remove Connect button */}
+                          <div className="mt-6 flex flex-col items-center w-full">
+                            <button
+                              className="btn-primary w-full mb-3"
+                              onClick={async () => {
+                                try {
+                                  const result = await requestConnection(user.id, match.id);
+                                  if (result.success) {
+                                    window.open('https://buy.stripe.com/5kQ28q0D17HF3qV2cH5AR0J', '_blank');
+                                  } else {
+                                    setError(result.error || 'Failed to create connection. Please try again.');
+                                    setTimeout(() => setError(null), 5000);
+                                  }
+                                } catch (err) {
+                                  setError('Failed to create connection. Please try again.');
+                                  setTimeout(() => setError(null), 5000);
+                                }
+                              }}
+                            >
+                              Proceed to Payment
+                            </button>
+                            <button
+                              className="btn-secondary w-full"
+                              onClick={() => setShowPauseDialog({ open: true, match })}
+                            >
+                              I don't want to match with {match.name}
+                            </button>
+                          </div>
+                          {/* Show contact info if both have paid */}
                             {connections[match.id] &&
                               connections[match.id].user_a_connected &&
                               connections[match.id].user_b_connected &&
@@ -775,15 +827,6 @@ Let's build something great together! 🚀`;
                                     Your partner's email: <span className="font-mono">{match.email}</span>
                                   </div>
                                 </div>
-                              )}
-                          </div>
-                          {notConnectedYet && !isUserPaused() && (
-                            <button
-                              className="btn-secondary mt-4"
-                              onClick={() => setShowPauseDialog({ open: true, match })}
-                            >
-                              I don't want to match with {match.name}
-                            </button>
                           )}
                         </div>
                       );

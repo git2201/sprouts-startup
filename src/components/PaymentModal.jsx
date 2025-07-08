@@ -58,23 +58,6 @@ const PaymentModal = ({
               Pay $25.00
             </button>
             <button
-              onClick={() => {
-                // Simulate a successful payment with a mock paymentIntentId
-                handleStripeBuyButtonSuccess({
-                  success: true,
-                  sessionId: 'mock-session',
-                  paymentIntentId: 'mock-payment-intent',
-                  connectionId,
-                  userId,
-                  targetUserName
-                });
-              }}
-              className="w-full py-3 px-6 rounded-xl font-semibold text-lg border-2 border-green-400 text-green-700 hover:bg-green-50 transition-all duration-200"
-              style={{ background: '#e6ffe6', marginTop: 8 }}
-            >
-              Mock Payment (Test Only)
-            </button>
-            <button
               onClick={onClose}
               className="w-full py-3 px-6 rounded-xl font-semibold text-lg border-2 border-gray-300 text-gray-600 hover:bg-gray-50 transition-all duration-200"
             >
@@ -85,6 +68,7 @@ const PaymentModal = ({
           <div className="mt-6 text-xs text-gray-500">
             <p>🔒 Your payment information is secure and encrypted</p>
             <p>💳 We accept all major credit cards</p>
+            <p>⏳ We will take up to one business day to connect the emails together.</p>
           </div>
         </div>
       </div>

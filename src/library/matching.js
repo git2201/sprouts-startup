@@ -110,8 +110,8 @@ export async function findMatchesForUser(userId, limit = 5) {
             motivation: (Array.isArray(profile.motivations) && profile.motivations.length > 0) ? profile.motivations.join(', ') : (profile.top_motivation || 'Not specified'),
             cofounder_preference: profile.cofounder_preference || 'Not specified',
             startup_stage: profile.startup_stage || 'Not specified',
-            availability: profile.availability || 'Not specified',
-            communication: profile.communication || 'Not specified',
+            availability: mapAvailability(profile.availability) || 'Not specified',
+            communication: mapCommunication(profile.communication) || 'Not specified',
             interests: profile.interests || 'Not specified',
           }
         })

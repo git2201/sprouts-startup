@@ -22,6 +22,9 @@ export function calculateMatchScore(userA, userB) {
     }
   };
 
+  // Add a base bonus of +10 points to all matches
+  let baseBonus = 10;
+
   // 1. MANDATORY FILTERS
   const availabilityCheck = checkAvailabilityCompatibility(userA, userB);
   if (availabilityCheck.disqualified) {
@@ -41,7 +44,7 @@ export function calculateMatchScore(userA, userB) {
   result.categoryScores.conflictStyle = calculateConflictStyleScore(userA, userB);
 
   // 3. Calculate total score
-  result.score = Object.values(result.categoryScores).reduce((sum, score) => sum + score, 0);
+  result.score = baseBonus + Object.values(result.categoryScores).reduce((sum, score) => sum + score, 0);
 
   return result;
 }
@@ -130,47 +133,50 @@ function calculateCommunicationScore(userA, userB) {
     'async': {
       'async': 10,
       'weekly_sync': 8,
-      'daily_checkin': 5,
-      'depends': 7
+      'daily_checkin': 8,
+      'depends': 8
     },
     'weekly_sync': {
       'async': 8,
       'weekly_sync': 10,
-      'daily_checkin': 7,
-      'depends': 7
+      'daily_checkin': 8,
+      'depends': 8
     },
     'daily_checkin': {
-      'async': 5,
-      'weekly_sync': 7,
+      'async': 8,
+      'weekly_sync': 8,
       'daily_checkin': 10,
-      'depends': 7
+      'depends': 8
     },
     'depends': {
-      'async': 7,
-      'weekly_sync': 7,
-      'daily_checkin': 7,
-      'depends': 7
+      'async': 8,
+      'weekly_sync': 8,
+      'daily_checkin': 8,
+      'depends': 8
     }
   };
 
-  return compatibilityMatrix[a]?.[b] || 5; // Default to 5 if not found
+  // Less strict: minimum score is 4
+  return compatibilityMatrix[a]?.[b] ?? 4;
 }
 
 function calculateMotivationScore(userA, userB) {
   let score = 0;
 
-  // Top motivation match = +10
+  // Top motivation match = +10, else +4
   if (userA.topMotivation === userB.topMotivation) {
     score += 10;
+  } else {
+    score += 4;
   }
 
-  // Shared secondary motivations = +2 each
+  // Shared secondary motivations = +5 each (less strict)
   const sharedMotivations = userA.motivations.filter(motivation => 
     userB.motivations.includes(motivation) && motivation !== userA.topMotivation
   );
-  score += sharedMotivations.length * 2;
+  score += sharedMotivations.length * 5;
 
-  // Conflicting values penalty = -5
+  // Conflicting values penalty = -2 (less strict)
   const conflictingPairs = [
     ['wealth', 'impact'],
     ['freedom', 'collaboration']
@@ -181,12 +187,10 @@ function calculateMotivationScore(userA, userB) {
     const bHasVal2 = userB.motivations.includes(val2) || userB.topMotivation === val2;
     const aHasVal2 = userA.motivations.includes(val2) || userA.topMotivation === val2;
     const bHasVal1 = userB.motivations.includes(val1) || userB.topMotivation === val1;
-    
     return (aHasVal1 && bHasVal2) || (aHasVal2 && bHasVal1);
   });
-
   if (hasConflict) {
-    score -= 5;
+    score -= 2;
   }
 
   return Math.min(Math.max(score, 0), 20); // Between 0 and 20
@@ -199,17 +203,20 @@ function calculateRolesScore(userA, userB) {
 
   // Complementary role pairs
   const complementaryPairs = [
+    ['technical', 'visionary'],
+    ['technical', 'operator'],
     ['technical', 'business'],
     ['technical', 'marketing'],
     ['technical', 'sales'],
-    ['visionary', 'operator'],
     ['designer', 'technical'],
     ['designer/ux', 'technical'],
     ['designer/ux', 'visionary'],
     ['marketer', 'technical'],
     ['sales', 'technical'],
     ['sales', 'visionary'],
-    ['marketer', 'visionary']
+    ['marketer', 'visionary'],
+    ['operator', 'visionary'],
+    ['visionary', 'operator']
   ];
 
   // Check for complementary roles
@@ -218,21 +225,19 @@ function calculateRolesScore(userA, userB) {
     const bHasRole2 = bRoles.includes(role2);
     const aHasRole2 = aRoles.includes(role2);
     const bHasRole1 = bRoles.includes(role1);
-    
     return (aHasRole1 && bHasRole2) || (aHasRole2 && bHasRole1);
   });
-
   if (hasComplementaryRoles) {
-    return 25; // Perfect role complementarity
+    return 15; // Complementary role pairs
   }
 
-  // Check for shared roles
+  // Check for shared roles (overlap)
   const sharedRoles = aRoles.filter(role => bRoles.includes(role));
   if (sharedRoles.length > 0) {
-    return 12; // Shared roles
+    return 5; // Overlapping roles, less synergy
   }
 
-  return 5; // No synergy
+  return 0; // No synergy
 }
 
 function calculateConflictStyleScore(userA, userB) {
@@ -243,31 +248,32 @@ function calculateConflictStyleScore(userA, userB) {
   const conflictMatrix = {
     'direct': {
       'direct': 9,
-      'indirect': 7,
-      'avoidant': 2,
-      'internalize': 2
+      'indirect': 8,
+      'avoidant': 8,
+      'internalize': 8
     },
     'indirect': {
-      'direct': 7,
-      'indirect': 6,
-      'avoidant': 5,
-      'internalize': 5
+      'direct': 8,
+      'indirect': 8,
+      'avoidant': 8,
+      'internalize': 8
     },
     'avoidant': {
-      'direct': 2,
-      'indirect': 5,
-      'avoidant': 3,
-      'internalize': 3
+      'direct': 8,
+      'indirect': 8,
+      'avoidant': 8,
+      'internalize': 8
     },
     'internalize': {
-      'direct': 2,
-      'indirect': 5,
-      'avoidant': 3,
-      'internalize': 3
+      'direct': 8,
+      'indirect': 8,
+      'avoidant': 8,
+      'internalize': 8
     }
   };
 
-  return conflictMatrix[a]?.[b] || 5; // Default to 5 if not found
+  // Less strict: minimum score is 4
+  return conflictMatrix[a]?.[b] ?? 4;
 }
 
 // Enhanced match quality function
