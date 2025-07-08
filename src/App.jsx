@@ -16,7 +16,7 @@ function App() {
   const [authState, setAuthState] = useState('welcome') // 'welcome', 'login', 'signup', 'onboarding', 'dashboard'
   const [user, setUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [onboardingData, setOnboardingData] = useState(null) // NEW: store onboarding answers
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
@@ -29,10 +29,33 @@ function App() {
   // Move useLocation to the top, before any returns
   const location = useLocation();
 
+  // Helper: Save user and profile to localStorage
+  const persistUserSession = (user, profile) => {
+    if (user && profile) {
+      localStorage.setItem('sprout_logged_in_user', JSON.stringify({ user, profile }))
+    } else {
+      localStorage.removeItem('sprout_logged_in_user')
+    }
+  }
+
+  // Helper: Restore user and profile from localStorage
+  const restoreUserSession = () => {
+    const data = localStorage.getItem('sprout_logged_in_user')
+    if (data) {
+      try {
+        const { user, profile } = JSON.parse(data)
+        return { user, profile }
+      } catch {
+        return { user: null, profile: null }
+      }
+    }
+    return { user: null, profile: null }
+  }
+
   useEffect(() => {
     // Test profiles table on app load
     testProfilesTable()
-    
+
     // Listen to auth state changes
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
       if (session?.user) {
@@ -41,20 +64,32 @@ function App() {
         if (!error && profile) {
           setUserProfile(profile)
           setAuthState('dashboard')
+          persistUserSession(session.user, profile)
         } else {
           setAuthState('onboarding')
+          persistUserSession(session.user, null)
         }
         setLoading(false)
       } else {
         setUser(null)
         setUserProfile(null)
         setAuthState('welcome')
+        persistUserSession(null, null)
         setLoading(false)
       }
     })
 
     // Check current user on app load
     const checkUser = async () => {
+      // Try to restore from localStorage first
+      const { user: storedUser, profile: storedProfile } = restoreUserSession()
+      if (storedUser && storedProfile) {
+        setUser(storedUser)
+        setUserProfile(storedProfile)
+        setAuthState('dashboard')
+        setLoading(false)
+        return
+      }
       const { user } = await getCurrentUser()
       if (user) {
         setUser(user)
@@ -62,15 +97,17 @@ function App() {
         if (profile) {
           setUserProfile(profile)
           setAuthState('dashboard')
+          persistUserSession(user, profile)
         } else {
           setAuthState('onboarding')
+          persistUserSession(user, null)
         }
         setLoading(false)
       } else {
         setLoading(false)
       }
     }
-    
+
     checkUser()
 
     console.log('After checkUser, user:', user, 'userProfile:', userProfile, 'authState:', authState);
@@ -90,13 +127,16 @@ function App() {
         setUserProfile(profile)
         setUser(prev => ({ ...prev, hasProfile: true }))
     setAuthState('dashboard')
+    persistUserSession(userData, profile)
     } else {
         console.log('User has no profile, going to onboarding')
         setAuthState('onboarding')
+        persistUserSession(userData, null)
       }
     } catch (error) {
       console.error('Error checking user profile:', error)
       setAuthState('onboarding')
+      persistUserSession(userData, null)
     }
   }
 
@@ -140,6 +180,7 @@ function App() {
         setUser(user)
         setUserProfile(profileData)
     setAuthState('dashboard')
+    persistUserSession(user, profileData)
       }
     } catch (err) {
       alert(err.message)
@@ -158,7 +199,8 @@ function App() {
     setUser(null);
     setUserProfile(null);
     setAuthState('welcome');
-      window.location.reload(); // Force reload to clear all state
+    persistUserSession(null, null)
+      // window.location.reload(); // Force reload to clear all state
   }
   };
 
@@ -214,7 +256,7 @@ function App() {
   let redirect = null;
   if (authState === 'dashboard' && location.pathname !== '/dashboard') {
     redirect = <Navigate to="/dashboard" replace />;
-  } else if (authState === 'onboarding' && location.pathname !== '/onboarding') {
+  } else if (authState === 'onboarding' && location.pathname !== '/onboarding' && !userProfile) {
     redirect = <Navigate to="/onboarding" replace />;
   } else if (authState === 'login' && location.pathname !== '/login') {
     redirect = <Navigate to="/login" replace />;
