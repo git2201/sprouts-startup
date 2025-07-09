@@ -55,6 +55,7 @@ function convertProfileToUserFormat(profile) {
     preferredRole: profile.preferred_role || '',
     teamStyle: profile.team_style || '',
     cofounderFrustration: profile.cofounder_frustration || '',
+    location: profile.location || '' ,
     role: profile.role || 'Not specified',
     work_style: profile.work_style || 'Not specified',
     motivation: profile.motivation || profile.top_motivation || 'Not specified',

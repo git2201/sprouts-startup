@@ -32,6 +32,12 @@ export function calculateMatchScore(userA, userB) {
     result.reasons.push(availabilityCheck.reason);
     return result;
   }
+  const locationCheck = checkLocationCompatibility(userA, userB);
+  if (locationCheck.disqualified) {
+    result.disqualified = true;
+    result.reasons.push(locationCheck.reason);
+    return result;
+  }
 
   // Communication - no disqualification, handled in scoring
 
@@ -62,6 +68,21 @@ function checkAvailabilityCompatibility(userA, userB) {
     };
   }
 
+  return { disqualified: false };
+}
+
+function checkLocationCompatibility(userA, userB) {
+  // Only match if both are in the same location and not 'Other'
+  if (
+    userA.location !== userB.location ||
+    userA.location === 'Other' ||
+    userB.location === 'Other'
+  ) {
+    return {
+      disqualified: true,
+      reason: `Location mismatch: ${userA.location} vs ${userB.location} - must match and not be 'Other'`
+    };
+  }
   return { disqualified: false };
 }
 
@@ -385,7 +406,8 @@ export function createUserFromOnboarding(userId, formData) {
     roles: formData.roles || [],
     preferredRole: formData.preferred_role || '',
     teamStyle: formData.team_style || '',
-    cofounderFrustration: formData.cofounder_frustration || ''
+    cofounderFrustration: formData.cofounder_frustration || '',
+    location: formData.location || ''
   };
 }
 
@@ -464,7 +486,8 @@ export function testMatchingAlgorithm() {
     roles: ['technical', 'visionary'],
     preferredRole: 'I want to build the product',
     teamStyle: 'flat and collaborative',
-    cofounderFrustration: 'Someone disorganized'
+    cofounderFrustration: 'Someone disorganized',
+    location: 'San Francisco'
   };
 
   const userB = {
@@ -486,7 +509,8 @@ export function testMatchingAlgorithm() {
     roles: ['business', 'operator'],
     preferredRole: 'I want to lead the vision',
     teamStyle: 'We define roles clearly and respect boundaries',
-    cofounderFrustration: 'Someone too controlling'
+    cofounderFrustration: 'Someone too controlling',
+    location: 'San Francisco'
   };
 
   const userC = {
@@ -508,7 +532,8 @@ export function testMatchingAlgorithm() {
     roles: ['designer', 'marketer'],
     preferredRole: 'I want to grow the user base',
     teamStyle: 'Someone leads, others follow',
-    cofounderFrustration: 'Someone who avoids conflict'
+    cofounderFrustration: 'Someone who avoids conflict',
+    location: 'New York'
   };
 
   // Test different scenarios
@@ -570,7 +595,8 @@ export function testMatchingAlgorithm() {
     roles: ['generalist'],
     preferredRole: 'I am open, depends on the match',
     teamStyle: 'I am flexible, depends on the people',
-    cofounderFrustration: 'I can adapt to most types'
+    cofounderFrustration: 'I can adapt to most types',
+    location: 'San Francisco'
   };
 
   console.log('=== Test 4: Flexible User Match ===');

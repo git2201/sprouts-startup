@@ -77,6 +77,13 @@ const OnboardingFlow = ({ onComplete }) => {
         'Web3',
       ],
     },
+    // NEW: Location question
+    {
+      id: 'location',
+      prompt: 'Where are you based?',
+      type: 'single_choice',
+      options: ['Boston', 'Greater Delhi', 'Other'],
+    },
     // 2. Availability & Work Style
     {
       id: 'availability',

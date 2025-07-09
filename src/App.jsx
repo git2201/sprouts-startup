@@ -6,7 +6,6 @@ import Header from './components/Header'
 import Login from './components/Login'
 import Signup from './components/Signup'
 import Dashboard from './components/Dashboard'
-import StripeTest from './components/StripeTest'
 import { onAuthStateChange, getCurrentUser, signOut, signUp } from './library/auth.js'
 import { getUserProfile, updateUserProfile } from './library/profiles.js'
 import { createUserFromOnboarding } from './utils/matching.js'
@@ -389,7 +388,6 @@ function App() {
         <Route path="/login" element={<Login onLogin={handleLogin} onSwitchToSignup={switchToSignup} />} />
         <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={switchToLogin} onboardingData={onboardingData} />} />
         <Route path="/onboarding" element={<OnboardingFlow onComplete={handleOnboardingComplete} />} />
-        <Route path="/stripe-test" element={<StripeTest />} />
         <Route path="/dashboard" element={
           user && userProfile ? (
             <Dashboard
