@@ -83,7 +83,7 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
             step={1}
             value={selectedValue}
             onChange={(e) => setSelectedValue(Number(e.target.value))}
-            className="w-2/3"
+            className="w-2/3 accent-green-500"
           />
           <div className="flex justify-between w-2/3 mt-2 text-sm">
             {[1, 2, 3, 4, 5, 6].map((num) => (

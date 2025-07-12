@@ -68,3 +68,35 @@ button:focus-visible {
   outline: 2px solid #667eea;
   outline-offset: 2px;
 }
+
+/* Green slider styles for onboarding */
+.green-slider {
+  accent-color: #22c55e; /* Tailwind green-500 */
+}
+.green-slider::-webkit-slider-thumb {
+  background: #22c55e;
+  border: none;
+}
+.green-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, #22c55e 0%, #22c55e var(--progress, 50%), #e5e7eb var(--progress, 50%), #e5e7eb 100%);
+  height: 6px;
+  border-radius: 3px;
+}
+.green-slider::-moz-range-thumb {
+  background: #22c55e;
+  border: none;
+}
+.green-slider::-moz-range-track {
+  background: #e5e7eb;
+  height: 6px;
+  border-radius: 3px;
+}
+.green-slider::-ms-fill-lower {
+  background: #22c55e;
+}
+.green-slider::-ms-fill-upper {
+  background: #e5e7eb;
+}
+.green-slider:focus {
+  outline: none;
+}

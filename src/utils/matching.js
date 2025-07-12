@@ -613,6 +613,145 @@ export function testMatchingAlgorithm() {
   }
   console.log('');
 
+  // Test 5: Location Mismatch (same availability, different locations)
+  const userE = {
+    id: 'user5',
+    personality: {
+      openness: 4,
+      conscientiousness: 3,
+      extraversion: 3,
+      agreeableness: 3,
+      neuroticism: 2
+    },
+    conflictStyle: 'direct',
+    availability: 'full_time',
+    availabilityFlexibility: 'slightly_flexible',
+    chronotype: 'morning',
+    communication: 'daily_checkin',
+    motivations: ['impact', 'learning'],
+    topMotivation: 'impact',
+    roles: ['technical'],
+    preferredRole: 'I want to build the product',
+    teamStyle: 'flat and collaborative',
+    cofounderFrustration: 'Someone disorganized',
+    location: 'San Francisco'
+  };
+
+  const userF = {
+    id: 'user6',
+    personality: {
+      openness: 3,
+      conscientiousness: 4,
+      extraversion: 2,
+      agreeableness: 4,
+      neuroticism: 3
+    },
+    conflictStyle: 'indirect',
+    availability: 'full_time', // SAME as userE
+    availabilityFlexibility: 'very_flexible',
+    chronotype: 'night',
+    communication: 'weekly_sync',
+    motivations: ['wealth', 'collaboration'],
+    topMotivation: 'wealth',
+    roles: ['business'],
+    preferredRole: 'I want to lead the vision',
+    teamStyle: 'We define roles clearly and respect boundaries',
+    cofounderFrustration: 'Someone too controlling',
+    location: 'New York' // DIFFERENT from userE
+  };
+
+  console.log('=== Test 5: Location Mismatch ===');
+  const matchEF = calculateMatchScore(userE, userF);
+  console.log('User E (San Francisco) + User F (New York)');
+  console.log('Score:', matchEF.score);
+  console.log('Disqualified:', matchEF.disqualified);
+  if (matchEF.disqualified) {
+    console.log('Reasons:', matchEF.reasons);
+  } else {
+    console.log('Category Scores:', matchEF.categoryScores);
+    const quality = getMatchQuality(matchEF.score);
+    console.log('Match Quality:', quality.quality);
+  }
+  console.log('');
+
+  // Test 6: Location Mismatch with onboarding options
+  const userG = {
+    id: 'user7',
+    personality: { openness: 4, conscientiousness: 3, extraversion: 3, agreeableness: 3, neuroticism: 2 },
+    conflictStyle: 'direct',
+    availability: 'full_time',
+    availabilityFlexibility: 'slightly_flexible',
+    chronotype: 'morning',
+    communication: 'daily_checkin',
+    motivations: ['impact', 'learning'],
+    topMotivation: 'impact',
+    roles: ['technical'],
+    preferredRole: 'I want to build the product',
+    teamStyle: 'flat and collaborative',
+    cofounderFrustration: 'Someone disorganized',
+    location: 'Boston'
+  };
+  const userH = {
+    id: 'user8',
+    personality: { openness: 3, conscientiousness: 4, extraversion: 2, agreeableness: 4, neuroticism: 3 },
+    conflictStyle: 'indirect',
+    availability: 'full_time',
+    availabilityFlexibility: 'very_flexible',
+    chronotype: 'night',
+    communication: 'weekly_sync',
+    motivations: ['wealth', 'collaboration'],
+    topMotivation: 'wealth',
+    roles: ['business'],
+    preferredRole: 'I want to lead the vision',
+    teamStyle: 'We define roles clearly and respect boundaries',
+    cofounderFrustration: 'Someone too controlling',
+    location: 'Greater Delhi'
+  };
+  const userI = {
+    id: 'user9',
+    personality: { openness: 3, conscientiousness: 4, extraversion: 2, agreeableness: 4, neuroticism: 3 },
+    conflictStyle: 'indirect',
+    availability: 'full_time',
+    availabilityFlexibility: 'very_flexible',
+    chronotype: 'night',
+    communication: 'weekly_sync',
+    motivations: ['wealth', 'collaboration'],
+    topMotivation: 'wealth',
+    roles: ['business'],
+    preferredRole: 'I want to lead the vision',
+    teamStyle: 'We define roles clearly and respect boundaries',
+    cofounderFrustration: 'Someone too controlling',
+    location: 'Other'
+  };
+
+  console.log('=== Test 6: Location Mismatch (Boston vs Greater Delhi) ===');
+  const matchGH = calculateMatchScore(userG, userH);
+  console.log('User G (Boston) + User H (Greater Delhi)');
+  console.log('Score:', matchGH.score);
+  console.log('Disqualified:', matchGH.disqualified);
+  if (matchGH.disqualified) {
+    console.log('Reasons:', matchGH.reasons);
+  } else {
+    console.log('Category Scores:', matchGH.categoryScores);
+    const quality = getMatchQuality(matchGH.score);
+    console.log('Match Quality:', quality.quality);
+  }
+  console.log('');
+
+  console.log('=== Test 7: Location Mismatch (Boston vs Other) ===');
+  const matchGI = calculateMatchScore(userG, userI);
+  console.log('User G (Boston) + User I (Other)');
+  console.log('Score:', matchGI.score);
+  console.log('Disqualified:', matchGI.disqualified);
+  if (matchGI.disqualified) {
+    console.log('Reasons:', matchGI.reasons);
+  } else {
+    console.log('Category Scores:', matchGI.categoryScores);
+    const quality = getMatchQuality(matchGI.score);
+    console.log('Match Quality:', quality.quality);
+  }
+  console.log('');
+
   return {
     matchAB,
     matchAC,

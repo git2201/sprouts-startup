@@ -271,30 +271,25 @@ function App() {
       {redirect}
       <Routes>
         <Route path="/" element={
-          <div className="min-h-screen flex flex-col bg-gradient-to-br from-white to-green-50 font-sans">
+          <div className="min-h-screen flex flex-col bg-white font-sans">
             {/* Hero Section */}
-            <section className="relative flex flex-col items-center justify-center text-center px-4 pt-24 pb-32 bg-gradient-to-br from-green-500 to-green-300 overflow-hidden">
-              {/* Abstract 3D/Isometric Shape */}
-              <div className="absolute -top-24 -left-24 w-96 h-96 bg-gradient-to-tr from-green-200 via-green-100 to-transparent rounded-full blur-3xl opacity-60 z-0"></div>
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-green-100 via-white to-transparent rounded-full blur-2xl opacity-40 z-0"></div>
-              <h1 className="relative z-10 text-4xl md:text-6xl font-extrabold text-white mb-6 leading-tight">
-                Build with someone who actually <span className="text-white/90">gets it.</span>
+            <section className="relative flex flex-col items-center justify-center text-center px-4 pt-24 pb-32 bg-white overflow-hidden">
+              <h1 className="relative z-10 text-4xl md:text-6xl font-extrabold text-gray-900 mb-6 leading-tight">
+                Build with someone who actually <span className="text-green-600">gets it.</span>
               </h1>
-              <p className="relative z-10 text-lg md:text-2xl text-white/90 mb-8 max-w-2xl mx-auto">
+              <p className="relative z-10 text-lg md:text-2xl text-gray-700 mb-8 max-w-2xl mx-auto">
                 Sprout matches you with a cofounder who shares your vision and complements your skills. No more random DMs — just real, meaningful connections.
               </p>
               <button
-                className="relative z-10 px-8 py-4 rounded-xl bg-white text-green-700 font-bold text-lg shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-300 border border-green-600 hover:bg-green-50"
+                className="relative z-10 px-8 py-4 rounded-xl bg-white text-green-600 font-bold text-lg shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-200 border border-green-500 hover:bg-green-50"
                 onClick={switchToOnboarding}
               >
                 Find Your Cofounder
               </button>
-              {/* Subtle 3D accent */}
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 h-16 bg-gradient-to-r from-green-200 to-green-100 rounded-full blur-2xl opacity-40 z-0"></div>
             </section>
 
             {/* How it Works Section */}
-            <section className="max-w-5xl mx-auto py-20 px-4">
+            <section className="max-w-5xl mx-auto py-20 px-4 bg-white">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">How it works</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                 {/* Step 1 */}
@@ -325,7 +320,7 @@ function App() {
             </section>
 
             {/* Why Sprout Section */}
-            <section className="max-w-6xl mx-auto py-20 px-4">
+            <section className="max-w-6xl mx-auto py-20 px-4 bg-white">
               <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">Why Sprout?</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                 <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
@@ -374,14 +369,32 @@ function App() {
                 {/* Add more testimonials or stats as needed */}
               </div>
             </section>
-            {/* Footer with login button */}
-            <footer className="w-full flex flex-col items-center justify-center py-12 mt-12">
+            {/* Footer with login button and sitemap/social links */}
+            <footer className="w-full flex flex-col items-center justify-center py-12 mt-12 bg-white border-t border-gray-100">
               <button
-                className="px-8 py-4 rounded-xl bg-white border border-green-600 text-green-700 font-bold text-lg shadow transition-all duration-200 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-300"
+                className="px-8 py-4 rounded-xl bg-white border border-green-600 text-green-700 font-bold text-lg shadow transition-all duration-200 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-300 mb-8"
                 onClick={switchToLogin}
               >
                 I already have an account
               </button>
+              <div className="w-full flex flex-col md:flex-row justify-between items-center max-w-5xl mx-auto px-4 mb-8 gap-8">
+                <div className="flex flex-col items-center md:items-start">
+                  <span className="text-green-600 font-bold text-lg mb-2">SITEMAP</span>
+                  <a href="#about" className="text-green-700 hover:underline mb-1">About</a>
+                  <a href="#contact" className="text-green-700 hover:underline mb-1">Contact</a>
+                  <a href="#privacy" className="text-green-700 hover:underline">Privacy</a>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-green-600 font-bold text-lg mb-2">FOLLOW</span>
+                  <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline mb-1">Instagram</a>
+                  <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline mb-1">LinkedIn</a>
+                  <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">Twitter</a>
+                </div>
+              </div>
+              <div className="flex flex-col items-center mt-4">
+                <span className="text-5xl font-extrabold text-green-600 mb-2 tracking-tight drop-shadow-lg" style={{letterSpacing: '-0.03em'}}>SPROUT</span>
+                <span className="text-gray-400 text-sm">© 2025 Sprout. All rights reserved.</span>
+              </div>
             </footer>
           </div>
         } />
