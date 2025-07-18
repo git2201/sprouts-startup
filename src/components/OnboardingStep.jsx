@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from "../library/supabase"
 
-const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formData }) => {
+const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formData, isProfileUpdate }) => {
+  console.log('OnboardingStep.jsx: isProfileUpdate', isProfileUpdate, 'isLastStep', isLastStep, 'step.id', step.id);
   const [selectedValue, setSelectedValue] = useState(
     formData[step.id] || (step.type === 'multi_select' ? [] : (step.type === 'scale' ? 3 : ''))
   );
@@ -155,10 +156,10 @@ const OnboardingStep = ({ step, onComplete, onBack, canGoBack, isLastStep, formD
             onClick={handleLetsSprout}
             disabled={selectedValue === ''}
           >
-            🌱 Let's Sprout! 
+            {isProfileUpdate ? 'Update Profile' : "🌱 Let's Sprout!"}
           </button>
           <p className="text-sm text-gray-500 mt-4 font-medium">
-            Ready to find your perfect cofounder!
+            {isProfileUpdate ? 'Update your profile to get matched with the best cofounders!' : 'Ready to find your perfect cofounder!'}
           </p>
         </div>
       )}

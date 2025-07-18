@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import OnboardingStep from './OnboardingStep'
 
-const OnboardingFlow = ({ onComplete }) => {
+const OnboardingFlow = ({ onComplete, showProfileUpdateBanner, prefill, isProfileUpdate }) => {
   const [currentStep, setCurrentStep] = useState(0)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => prefill ? { ...prefill } : {
     roles: [],
     personality: '',
     workStyle: '',
@@ -15,6 +15,12 @@ const OnboardingFlow = ({ onComplete }) => {
   })
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [selectedProfile, setSelectedProfile] = useState(null)
+
+  useEffect(() => {
+    if (prefill) {
+      setFormData({ ...prefill })
+    }
+  }, [prefill])
 
   const onboardingQuestions = [
     // 1. Personality Traits (Big Five)
@@ -158,13 +164,21 @@ const OnboardingFlow = ({ onComplete }) => {
       prompt: 'Which of these best describe your strengths? (select realistically)',
       type: 'multi_select',
       options: [
-        'Visionary',
-        'Operator',
+        // Technical Roles
         'Technical',
-        'Designer/UX',
-        'Marketer',
+        'Engineer',
+        'Developer',
+        // Non-Technical Roles
+        'Marketing',
         'Sales',
+        'Growth',
+        'Visionary',
+        // Neutral/Support Roles
+        'Designer',
+        'Product Manager',
         'Generalist',
+        'Operator',
+        'Media & Brand',
       ],
     },
     {
@@ -246,6 +260,15 @@ const OnboardingFlow = ({ onComplete }) => {
           </p>
         </div>
 
+        {showProfileUpdateBanner && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded">
+            <strong>Sprout’s matching system has been upgraded!</strong>
+            <div>
+              To keep matching accurately, please update your role and profile info.
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12">
           {/* Progress Bar */}
           <div className="mb-10">
@@ -272,6 +295,7 @@ const OnboardingFlow = ({ onComplete }) => {
             canGoBack={currentStep > 0}
             isLastStep={currentStep === onboardingQuestions.length - 1}
             formData={formData}
+            isProfileUpdate={isProfileUpdate}
           />
         </div>
       </div>

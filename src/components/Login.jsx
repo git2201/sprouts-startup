@@ -118,7 +118,7 @@ const Login = ({ onLogin, onSwitchToSignup }) => {
                 onChange={handleChange}
                 className={`input-field ${errors.password ? 'border-red-500' : ''}`}
                 placeholder="Enter your password"
-                disabled={isLoading}
+                autoComplete="current-password"
               />
               {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
             </div>

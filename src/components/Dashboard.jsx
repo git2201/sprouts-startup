@@ -10,11 +10,13 @@ import {
   deleteConnection
 } from '../library/connections.js'
 import ConnectionStatus from './ConnectionStatus.jsx'
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate, Link } from 'react-router-dom';
 
 const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
+  console.log('Dashboard.jsx: userProfile', userProfile);
+  const navigate = useNavigate();
   if (!user || !userProfile || !onLogout) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
   console.log('Dashboard rendered', { onLogout });
   const [activeTab, setActiveTab] = useState('overview')
@@ -202,6 +204,7 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
 
   // Helper to summarize roles/skills
   const getRolesSkills = () => {
+    console.log('Dashboard.jsx: rendering roles', userProfile?.roles);
     if (!userProfile) return ''
     const roles = userProfile.roles?.join(', ') || userProfile.role || ''
     const preferred = userProfile.preferred_role || ''
@@ -339,9 +342,15 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
               <div className="text-2xl">🌱</div>
               <h1 className="text-xl font-bold text-gray-900">Sprout</h1>
             </div>
-            
             <div className="flex items-center space-x-4">
-              {/* Remove Welcome, {name} and View Profile button */}
+              <button
+                className="btn-secondary text-sm"
+                onClick={() => navigate('/onboarding')}
+                // Only disable if loading is true and not null
+                disabled={!!loading}
+              >
+                Edit Profile
+              </button>
               <button
                 onClick={handleLogout}
                 className="btn-secondary text-sm"

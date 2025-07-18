@@ -22,10 +22,7 @@ export function calculateMatchScore(userA, userB) {
     }
   };
 
-  // Add a base bonus of +10 points to all matches
-  let baseBonus = 10;
-
-  // 1. MANDATORY FILTERS
+  // --- HARD DISQUALIFIERS ---
   const availabilityCheck = checkAvailabilityCompatibility(userA, userB);
   if (availabilityCheck.disqualified) {
     result.disqualified = true;
@@ -38,8 +35,18 @@ export function calculateMatchScore(userA, userB) {
     result.reasons.push(locationCheck.reason);
     return result;
   }
-
-  // Communication - no disqualification, handled in scoring
+  const roleCheck = checkRoleComplementarity(userA, userB);
+  if (roleCheck.disqualified) {
+    result.disqualified = true;
+    result.reasons.push(roleCheck.reason);
+    return result;
+  }
+  const ageCheck = checkAgeCompatibility(userA, userB);
+  if (ageCheck.disqualified) {
+    result.disqualified = true;
+    result.reasons.push(ageCheck.reason);
+    return result;
+  }
 
   // 2. Calculate category scores
   result.categoryScores.personality = calculatePersonalityScore(userA, userB);
@@ -49,8 +56,39 @@ export function calculateMatchScore(userA, userB) {
   result.categoryScores.roles = calculateRolesScore(userA, userB);
   result.categoryScores.conflictStyle = calculateConflictStyleScore(userA, userB);
 
-  // 3. Calculate total score
+  // --- CATEGORY CUTOFFS ---
+  // If any category is <6, disqualify
+  for (const [cat, score] of Object.entries(result.categoryScores)) {
+    if (score < 6) {
+      result.disqualified = true;
+      result.reasons.push(`Category '${cat}' score too low: ${score}`);
+      return result;
+    }
+  }
+
+  // --- SCORING CHANGES ---
+  // Remove/reduce base bonus
+  let baseBonus = 0; // Set to 0 for strictness
+  // Total score
   result.score = baseBonus + Object.values(result.categoryScores).reduce((sum, score) => sum + score, 0);
+
+  // Penalties for communication style
+  if (!areCommunicationStylesCompatible(userA, userB)) {
+    result.score -= 3;
+  }
+  // Penalties for conflicting motivations
+  if (areMotivationsConflicting(userA, userB)) {
+    result.score -= 5;
+  }
+
+  // Cap category scores strictly to their max values (already done in helpers)
+
+  // Minimum match threshold
+  if (result.score < 95) {
+    result.disqualified = true;
+    result.reasons.push(`Score below strict threshold: ${result.score}`);
+    return result;
+  }
 
   return result;
 }
@@ -83,6 +121,61 @@ function checkLocationCompatibility(userA, userB) {
       reason: `Location mismatch: ${userA.location} vs ${userB.location} - must match and not be 'Other'`
     };
   }
+  return { disqualified: false };
+}
+
+// --- HARD DISQUALIFIERS ---
+function checkAgeCompatibility(userA, userB) {
+  // If either age is missing, do not disqualify (assumption: missing data is not a hard block)
+  if (userA.age == null || userB.age == null) return { disqualified: false };
+  const diff = Math.abs(Number(userA.age) - Number(userB.age));
+  if (diff > 4) {
+    return {
+      disqualified: true,
+      reason: `Age difference too large: ${userA.age} vs ${userB.age} (max 4 years)`
+    };
+  }
+  return { disqualified: false };
+}
+
+function checkRoleComplementarity(userA, userB) {
+  // OPTION 2: Only match core cofounder pairs: Technical + Non-Technical
+  // Technical: Technical, Engineer, Developer
+  // Non-Technical: Marketing, Sales, Growth, Visionary, Marketer
+  // Neutral/Support: Designer, Designer/UX, Generalist, Operator (don't block matching)
+  
+  const technicalRoles = ['technical', 'engineer', 'developer'];
+  const nonTechnicalRoles = ['marketing', 'sales', 'growth', 'visionary', 'marketer'];
+  const neutralRoles = ['designer', 'product manager', 'generalist', 'operator', 'media & brand'];
+  
+  const aRoles = userA.roles.map(r => r.toLowerCase());
+  const bRoles = userB.roles.map(r => r.toLowerCase());
+  
+  // Check if users have technical and non-technical roles
+  const aIsTechnical = aRoles.some(r => technicalRoles.includes(r));
+  const bIsTechnical = bRoles.some(r => technicalRoles.includes(r));
+  const aIsNonTechnical = aRoles.some(r => nonTechnicalRoles.includes(r));
+  const bIsNonTechnical = bRoles.some(r => nonTechnicalRoles.includes(r));
+  
+  // OPTION 2 REQUIREMENT: Must have exactly one Technical and one Non-Technical
+  if ((aIsTechnical && bIsTechnical) || (aIsNonTechnical && bIsNonTechnical)) {
+    return {
+      disqualified: true,
+      reason: `Roles not complementary: both ${aIsTechnical ? 'technical' : 'non-technical'}`
+    };
+  }
+  
+  // Must have at least one technical and one non-technical
+  if (!(aIsTechnical || bIsTechnical) || !(aIsNonTechnical || bIsNonTechnical)) {
+    return {
+      disqualified: true,
+      reason: `No technical/non-technical complementarity required for Option 2`
+    };
+  }
+  
+  // NOTE: Neutral roles (Designer, PM, Ops, Generalist, etc.) are allowed to overlap
+  // and don't disqualify matches - they're secondary/neutral roles
+  
   return { disqualified: false };
 }
 
@@ -222,50 +315,53 @@ function calculateRolesScore(userA, userB) {
   const aRoles = userA.roles.map(role => role.toLowerCase());
   const bRoles = userB.roles.map(role => role.toLowerCase());
 
-  // Complementary role pairs
-  const complementaryPairs = [
-    ['technical', 'visionary'],
-    ['technical', 'operator'],
-    ['technical', 'business'],
-    ['technical', 'marketing'],
-    ['technical', 'sales'],
-    ['designer', 'technical'],
-    ['designer/ux', 'technical'],
-    ['designer/ux', 'visionary'],
-    ['marketer', 'technical'],
-    ['sales', 'technical'],
-    ['sales', 'visionary'],
-    ['marketer', 'visionary'],
-    ['operator', 'visionary'],
-    ['visionary', 'operator']
-  ];
-
-  // Check for complementary roles
-  const hasComplementaryRoles = complementaryPairs.some(([role1, role2]) => {
-    const aHasRole1 = aRoles.includes(role1);
-    const bHasRole2 = bRoles.includes(role2);
-    const aHasRole2 = aRoles.includes(role2);
-    const bHasRole1 = bRoles.includes(role1);
-    return (aHasRole1 && bHasRole2) || (aHasRole2 && bHasRole1);
-  });
-  if (hasComplementaryRoles) {
-    return 15; // Complementary role pairs
+  // OPTION 2: Score based on core technical + non-technical complementarity
+  const technicalRoles = ['technical', 'engineer', 'developer'];
+  const nonTechnicalRoles = ['marketing', 'sales', 'growth', 'visionary', 'marketer'];
+  const neutralRoles = ['designer', 'product manager', 'generalist', 'operator', 'media & brand'];
+  
+  const aIsTechnical = aRoles.some(r => technicalRoles.includes(r));
+  const bIsTechnical = bRoles.some(r => technicalRoles.includes(r));
+  const aIsNonTechnical = aRoles.some(r => nonTechnicalRoles.includes(r));
+  const bIsNonTechnical = bRoles.some(r => nonTechnicalRoles.includes(r));
+  
+  // Perfect Option 2 match: Technical + Non-Technical
+  if ((aIsTechnical && bIsNonTechnical) || (aIsNonTechnical && bIsTechnical)) {
+    return 15; // High score for core cofounder pair
   }
-
-  // Check for shared roles (overlap)
-  const sharedRoles = aRoles.filter(role => bRoles.includes(role));
-  if (sharedRoles.length > 0) {
-    return 5; // Overlapping roles, less synergy
+  
+  // Check for shared neutral roles (bonus, not required)
+  const sharedNeutralRoles = aRoles.filter(role => bRoles.includes(role) && neutralRoles.includes(role));
+  if (sharedNeutralRoles.length > 0) {
+    return 5; // Good score for shared neutral roles
   }
-
-  return 0; // No synergy
+  
+  return 0; // No synergy if both users are tech-only or non-tech-only
 }
 
+// --- Penalty helpers ---
+function areCommunicationStylesCompatible(userA, userB) {
+  // Async vs daily check-ins = incompatible
+  const a = userA.communication;
+  const b = userB.communication;
+  if ((a === 'async' && b === 'daily_checkin') || (a === 'daily_checkin' && b === 'async')) {
+    return false;
+  }
+  return true;
+}
+function areMotivationsConflicting(userA, userB) {
+  // "freedom" vs "collaboration" is a hard conflict
+  const aMot = [userA.topMotivation, ...(userA.motivations||[])].map(m => m && m.toLowerCase());
+  const bMot = [userB.topMotivation, ...(userB.motivations||[])].map(m => m && m.toLowerCase());
+  return (aMot.includes('freedom') && bMot.includes('collaboration')) || (aMot.includes('collaboration') && bMot.includes('freedom'));
+}
+// --- ConflictStyle scoring update ---
 function calculateConflictStyleScore(userA, userB) {
   const a = userA.conflictStyle;
   const b = userB.conflictStyle;
-
-  // Conflict style compatibility matrix
+  if (a === 'collaborative' && b === 'collaborative') return 10;
+  if ((a === 'avoidant' && b === 'confrontational') || (a === 'confrontational' && b === 'avoidant')) return -5;
+  // Fallback to previous logic
   const conflictMatrix = {
     'direct': {
       'direct': 9,
@@ -292,8 +388,6 @@ function calculateConflictStyleScore(userA, userB) {
       'internalize': 8
     }
   };
-
-  // Less strict: minimum score is 4
   return conflictMatrix[a]?.[b] ?? 4;
 }
 
@@ -363,10 +457,10 @@ export function getCategoryDescription(category, score) {
       0: 'Different core motivations'
     },
     roles: {
-      25: 'Perfect role complementarity',
-      12: 'Shared role strengths',
+      15: 'Perfect technical + non-technical complementarity',
+      10: 'Good role synergy with shared neutral roles',
       5: 'Limited role synergy',
-      0: 'Role conflict'
+      0: 'No technical/non-technical complementarity'
     },
     conflictStyle: {
       10: 'Compatible conflict resolution',
@@ -407,7 +501,8 @@ export function createUserFromOnboarding(userId, formData) {
     preferredRole: formData.preferred_role || '',
     teamStyle: formData.team_style || '',
     cofounderFrustration: formData.cofounder_frustration || '',
-    location: formData.location || ''
+    location: formData.location || '',
+    age: formData.age ? Number(formData.age) : null
   };
 }
 
@@ -487,7 +582,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to build the product',
     teamStyle: 'flat and collaborative',
     cofounderFrustration: 'Someone disorganized',
-    location: 'San Francisco'
+    location: 'San Francisco',
+    age: 28
   };
 
   const userB = {
@@ -510,7 +606,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to lead the vision',
     teamStyle: 'We define roles clearly and respect boundaries',
     cofounderFrustration: 'Someone too controlling',
-    location: 'San Francisco'
+    location: 'San Francisco',
+    age: 32
   };
 
   const userC = {
@@ -533,7 +630,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to grow the user base',
     teamStyle: 'Someone leads, others follow',
     cofounderFrustration: 'Someone who avoids conflict',
-    location: 'New York'
+    location: 'New York',
+    age: 25
   };
 
   // Test different scenarios
@@ -596,7 +694,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I am open, depends on the match',
     teamStyle: 'I am flexible, depends on the people',
     cofounderFrustration: 'I can adapt to most types',
-    location: 'San Francisco'
+    location: 'San Francisco',
+    age: 29
   };
 
   console.log('=== Test 4: Flexible User Match ===');
@@ -634,7 +733,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to build the product',
     teamStyle: 'flat and collaborative',
     cofounderFrustration: 'Someone disorganized',
-    location: 'San Francisco'
+    location: 'San Francisco',
+    age: 30
   };
 
   const userF = {
@@ -657,7 +757,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to lead the vision',
     teamStyle: 'We define roles clearly and respect boundaries',
     cofounderFrustration: 'Someone too controlling',
-    location: 'New York' // DIFFERENT from userE
+    location: 'New York', // DIFFERENT from userE
+    age: 31
   };
 
   console.log('=== Test 5: Location Mismatch ===');
@@ -689,7 +790,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to build the product',
     teamStyle: 'flat and collaborative',
     cofounderFrustration: 'Someone disorganized',
-    location: 'Boston'
+    location: 'Boston',
+    age: 27
   };
   const userH = {
     id: 'user8',
@@ -705,7 +807,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to lead the vision',
     teamStyle: 'We define roles clearly and respect boundaries',
     cofounderFrustration: 'Someone too controlling',
-    location: 'Greater Delhi'
+    location: 'Greater Delhi',
+    age: 26
   };
   const userI = {
     id: 'user9',
@@ -721,7 +824,8 @@ export function testMatchingAlgorithm() {
     preferredRole: 'I want to lead the vision',
     teamStyle: 'We define roles clearly and respect boundaries',
     cofounderFrustration: 'Someone too controlling',
-    location: 'Other'
+    location: 'Other',
+    age: 28
   };
 
   console.log('=== Test 6: Location Mismatch (Boston vs Greater Delhi) ===');

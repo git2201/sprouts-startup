@@ -10,6 +10,7 @@ import { onAuthStateChange, getCurrentUser, signOut, signUp } from './library/au
 import { getUserProfile, updateUserProfile } from './library/profiles.js'
 import { createUserFromOnboarding } from './utils/matching.js'
 import { testProfilesTable } from './library/supabase.js'
+import { hasDeprecatedRolesOrMissingFields } from './utils/profileValidation';
 
 function App() {
   const [authState, setAuthState] = useState('welcome') // 'welcome', 'login', 'signup', 'onboarding', 'dashboard'
@@ -24,6 +25,7 @@ function App() {
     roles: userProfile?.roles || [],
     industries: userProfile?.industries || [],
   });
+  const [showProfileUpdateBanner, setShowProfileUpdateBanner] = useState(false);
 
   // Move useLocation to the top, before any returns
   const location = useLocation();
@@ -51,35 +53,17 @@ function App() {
     return { user: null, profile: null }
   }
 
+  // 1. Only call checkUser() on mount, not on every render
   useEffect(() => {
-    // Test profiles table on app load
-    testProfilesTable()
-
-    // Listen to auth state changes
-    const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        setUser(session.user)
-        const { profile, error } = await getUserProfile(session.user.id)
-        if (!error && profile) {
-          setUserProfile(profile)
-          setAuthState('dashboard')
-          persistUserSession(session.user, profile)
-        } else {
-          setAuthState('onboarding')
-          persistUserSession(session.user, null)
-        }
-        setLoading(false)
-      } else {
-        setUser(null)
-        setUserProfile(null)
-        setAuthState('welcome')
-        persistUserSession(null, null)
-        setLoading(false)
+    let didRun = false;
+    const runCheckUser = async () => {
+      if (didRun) return;
+      didRun = true;
+      // Early exit if already authenticated and on correct state
+      if ((user && userProfile && authState === 'dashboard') || (user && !userProfile && authState === 'onboarding')) {
+        setLoading(false);
+        return;
       }
-    })
-
-    // Check current user on app load
-    const checkUser = async () => {
       // Try to restore from localStorage first
       const { user: storedUser, profile: storedProfile } = restoreUserSession()
       if (storedUser && storedProfile) {
@@ -89,45 +73,55 @@ function App() {
         setLoading(false)
         return
       }
-      const { user } = await getCurrentUser()
-      if (user) {
-        setUser(user)
-        const { profile } = await getUserProfile(user.id)
+      const { user: currentUser } = await getCurrentUser()
+      if (currentUser) {
+        setUser(currentUser)
+        const { profile } = await getUserProfile(currentUser.id)
         if (profile) {
           setUserProfile(profile)
           setAuthState('dashboard')
-          persistUserSession(user, profile)
+          persistUserSession(currentUser, profile)
         } else {
+          setUserProfile(null)
           setAuthState('onboarding')
-          persistUserSession(user, null)
+          persistUserSession(currentUser, null)
         }
         setLoading(false)
       } else {
+        setUser(null)
+        setUserProfile(null)
+        setAuthState('welcome')
         setLoading(false)
       }
+    };
+    runCheckUser();
+    // No dependency array: only run once on mount
+    // eslint-disable-next-line
+  }, []);
+
+  // 2. After successful login, always route to dashboard if state is correct
+  useEffect(() => {
+    if (user && userProfile && authState !== 'dashboard') {
+      setAuthState('dashboard');
     }
+  }, [user, userProfile, authState]);
 
-    checkUser()
-
-    console.log('After checkUser, user:', user, 'userProfile:', userProfile, 'authState:', authState);
-
-    return () => subscription?.unsubscribe()
-  }, [])
+  // 3. Clear stale session data on logout/session expiry (already handled in handleLogout and onAuthStateChange)
+  // 4. Remove redundant checkUser() calls (now only runs on mount)
+  // 5. Always respect authState if already correct (guarded in checkUser and new useEffect)
 
   const handleLogin = async (userData) => {
     console.log('Login successful:', userData) // Debug log
     setUser(userData)
-    
-    // Check if user has a profile in the database
     try {
       const { profile, error } = await getUserProfile(userData.id)
       if (!error && profile) {
         console.log('User has profile:', profile)
         setUserProfile(profile)
         setUser(prev => ({ ...prev, hasProfile: true }))
-    setAuthState('dashboard')
-    persistUserSession(userData, profile)
-    } else {
+        setAuthState('dashboard') // <-- Ensure dashboard state after login
+        persistUserSession(userData, profile)
+      } else {
         console.log('User has no profile, going to onboarding')
         setAuthState('onboarding')
         persistUserSession(userData, null)
@@ -139,10 +133,30 @@ function App() {
     }
   }
 
-  const handleOnboardingComplete = (data) => {
-    setOnboardingData(data)
-    setAuthState('signup')
-  }
+  const handleOnboardingComplete = async (formData) => {
+    console.log('App.jsx: handleOnboardingComplete called with', formData, 'user:', user);
+    if (user && user.id) {
+      // Existing user: update profile
+      setLoading(true);
+      const { error } = await updateUserProfile(user.id, formData);
+      console.log('App.jsx: updateUserProfile finished, error:', error);
+      // Always fetch the latest profile from Supabase after update
+      const { profile: updatedProfile, error: fetchError } = await getUserProfile(user.id);
+      console.log('App.jsx: getUserProfile after update, updatedProfile:', updatedProfile, 'fetchError:', fetchError);
+      if (!error && updatedProfile) {
+        setUserProfile(updatedProfile);
+        console.log('App.jsx: setUserProfile called with', updatedProfile);
+        setAuthState('dashboard');
+      } else {
+        alert('Error updating profile: ' + (error?.message || fetchError || JSON.stringify(error)));
+      }
+      setLoading(false);
+    } else {
+      // New user onboarding (signup flow)
+      setOnboardingData(formData);
+      setAuthState('signup');
+    }
+  };
 
   const handleSignup = async (signupData) => {
     // signupData: { name, email, phone, password }
@@ -218,6 +232,14 @@ function App() {
     }
   }, [user, userProfile, loading]);
 
+  useEffect(() => {
+    // Add post-login profile validation
+    if (userProfile && hasDeprecatedRolesOrMissingFields(userProfile)) {
+      setShowProfileUpdateBanner(true);
+      setAuthState('onboarding');
+    }
+  }, [userProfile]);
+
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     const { error } = await updateUserProfile(user.id, {
@@ -264,6 +286,8 @@ function App() {
   } else if (authState === 'welcome' && location.pathname !== '/') {
     redirect = <Navigate to="/" replace />;
   }
+
+  console.log('App.jsx: isProfileUpdate', !!user, 'user:', user, 'userProfile:', userProfile);
 
   return (
     <div className="app">
@@ -400,7 +424,7 @@ function App() {
         } />
         <Route path="/login" element={<Login onLogin={handleLogin} onSwitchToSignup={switchToSignup} />} />
         <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={switchToLogin} onboardingData={onboardingData} />} />
-        <Route path="/onboarding" element={<OnboardingFlow onComplete={handleOnboardingComplete} />} />
+        <Route path="/onboarding" element={<OnboardingFlow showProfileUpdateBanner={showProfileUpdateBanner} prefill={userProfile} onComplete={handleOnboardingComplete} isProfileUpdate={!!user} />} />
         <Route path="/dashboard" element={
           user && userProfile ? (
             <Dashboard
@@ -456,7 +480,7 @@ function App() {
               )}
             </Dashboard>
           ) : (
-            <Navigate to="/login" replace />
+            <Navigate to="/" replace />
           )
         } />
       </Routes>

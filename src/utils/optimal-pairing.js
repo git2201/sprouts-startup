@@ -141,7 +141,7 @@ const people = [
     communication: 'daily_checkin',
     motivations: ['wealth', 'impact', 'collaboration'],
     topMotivation: 'wealth',
-    roles: ['marketer', 'sales'],
+    roles: ['marketing', 'sales'],
     preferredRole: 'I want to grow the user base',
     teamStyle: 'We define roles clearly and respect boundaries',
     cofounderFrustration: 'Someone disorganized'

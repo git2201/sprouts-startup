@@ -13,7 +13,7 @@ const samiraData = {
   conflict_style: 'I bring it up gently, usually after thinking it through',
   motivations: ['Impact', 'Learning Fast', 'Freedom'],
   top_motivation: 'Impact',
-  roles: ['Visionary', 'Operator'],
+  roles: ['visionary', 'operator'],
   preferred_role: 'I want to lead the vision',
   team_style: 'We define roles clearly and respect boundaries',
   cofounder_frustration: 'Someone disorganized'
@@ -32,7 +32,7 @@ const davidData = {
   conflict_style: 'I prefer to address it directly and resolve it quickly',
   motivations: ['Impact', 'Learning Fast', 'Collaboration'],
   top_motivation: 'Impact',
-  roles: ['Technical', 'Designer/UX'],
+  roles: ['technical', 'designer'],
   preferred_role: 'I want to build the product',
   team_style: 'Flat and collaborative',
   cofounder_frustration: 'Someone too controlling'
