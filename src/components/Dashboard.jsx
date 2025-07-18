@@ -12,7 +12,7 @@ import {
 import ConnectionStatus from './ConnectionStatus.jsx'
 import { Navigate, useNavigate, Link } from 'react-router-dom';
 
-const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
+const Dashboard = ({ user, userProfile, setUserProfile, onLogout, onEditProfile }) => {
   console.log('Dashboard.jsx: userProfile', userProfile);
   const navigate = useNavigate();
   if (!user || !userProfile || !onLogout) {
@@ -345,7 +345,10 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
             <div className="flex items-center space-x-4">
               <button
                 className="btn-secondary text-sm"
-                onClick={() => navigate('/onboarding')}
+                onClick={() => {
+                  onEditProfile();
+                  navigate('/onboarding');
+                }}
                 // Only disable if loading is true and not null
                 disabled={!!loading}
               >

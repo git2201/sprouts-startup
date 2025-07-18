@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import './App.css'
 import OnboardingFlow from './components/OnboardingFlow'
 import Header from './components/Header'
@@ -26,6 +26,7 @@ function App() {
     industries: userProfile?.industries || [],
   });
   const [showProfileUpdateBanner, setShowProfileUpdateBanner] = useState(false);
+  const navigate = useNavigate();
 
   // Move useLocation to the top, before any returns
   const location = useLocation();
@@ -101,7 +102,7 @@ function App() {
 
   // 2. After successful login, always route to dashboard if state is correct
   useEffect(() => {
-    if (user && userProfile && authState !== 'dashboard') {
+    if (user && userProfile && authState !== 'dashboard' && authState !== 'onboarding') {
       setAuthState('dashboard');
     }
   }, [user, userProfile, authState]);
@@ -259,6 +260,11 @@ function App() {
     }
   };
 
+  const onEditProfile = () => {
+    setAuthState('onboarding');
+    navigate('/onboarding');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 font-poppins">
@@ -277,7 +283,7 @@ function App() {
   let redirect = null;
   if (authState === 'dashboard' && location.pathname !== '/dashboard') {
     redirect = <Navigate to="/dashboard" replace />;
-  } else if (authState === 'onboarding' && location.pathname !== '/onboarding' && !userProfile) {
+  } else if (authState === 'onboarding' && location.pathname !== '/onboarding') {
     redirect = <Navigate to="/onboarding" replace />;
   } else if (authState === 'login' && location.pathname !== '/login') {
     redirect = <Navigate to="/login" replace />;
@@ -431,6 +437,7 @@ function App() {
               user={user}
               userProfile={userProfile}
               onLogout={handleLogout}
+              onEditProfile={onEditProfile}
               editing={editing}
               editFields={editFields}
               setEditing={setEditing}
