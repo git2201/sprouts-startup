@@ -48,9 +48,9 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout, onEditProfile 
     if (user?.user_metadata?.name) {
       return user.user_metadata.name.split(' ')[0]
     }
-    if (user?.email) {
+    /*if (user?.email) {
       return user.email.split('@')[0]
-    }
+    } Change Back Later: david*/
     return 'there'
   }
 
