@@ -10,106 +10,9 @@ import { onAuthStateChange, getCurrentUser, signOut, signUp } from './library/au
 import { getUserProfile, updateUserProfile } from './library/profiles.js'
 import { createUserFromOnboarding } from './utils/matching.js'
 import { testProfilesTable } from './library/supabase.js'
-import { hasDeprecatedRolesOrMissingFields } from './utils/profileValidation';
-// Add this function to your App.jsx or create a separate utils file
+import { hasDeprecatedRolesOrMissingFields } from './utils/profileValidation'
+import { mapOnboardingDataToProfile } from './utils/onboardingMapper'
 
-// Function to map onboarding form data to database fields
-export function mapOnboardingDataToProfile(formData) {
-  return {
-    // Personality traits (Big Five) - direct mapping
-    openness: formData.openness,
-    conscientiousness: formData.conscientiousness,
-    extraversion: formData.extraversion,
-    agreeableness: formData.agreeableness,
-    neuroticism: formData.neuroticism,
-    
-    // Demographics
-    age: formData.age ? parseInt(formData.age) : null,
-    location: formData.location,
-    
-    // Availability and work style
-    availability: mapAvailabilityValue(formData.availability),
-    availability_flexibility: mapFlexibilityValue(formData.availability_flexibility),
-    chronotype: mapChronotypeValue(formData.chronotype),
-    communication: mapCommunicationValue(formData.communication),
-    
-    // Conflict and team preferences
-    conflict_style: mapConflictStyleValue(formData.conflict_style),
-    team_style: formData.team_style,
-    cofounder_frustration: formData.cofounder_frustration,
-    
-    // Motivations
-    motivations: Array.isArray(formData.motivations) ? formData.motivations : [],
-    top_motivation: formData.top_motivation,
-    exit_scenario: formData.exit_scenario,
-    
-    // Skills and roles
-    roles: Array.isArray(formData.roles) ? formData.roles : [],
-    industries: Array.isArray(formData.industries) ? formData.industries : [],
-    preferred_role: formData.preferred_role,
-    
-    // Additional fields that the app expects
-    cofounder_preference: formData.cofounder_preference || 'Not specified',
-    startup_stage: formData.startupStage || formData.startup_stage || 'Not specified',
-    work_style: formData.work_style || formData.workStyle || 'Not specified',
-    motivation: formData.motivation || formData.top_motivation || 'Not specified',
-    role: formData.role || (Array.isArray(formData.roles) && formData.roles.length > 0 ? formData.roles[0] : 'Not specified'),
-    
-    // System fields
-    updated_at: new Date().toISOString()
-  };
-}
-
-// Helper functions to map onboarding form values to database values
-function mapAvailabilityValue(availability) {
-  const mapping = {
-    'Nights/weekends only': 'nights_weekends',
-    '10—20 hrs/week': '10_20',
-    '20—40 hrs/week': '20_40',
-    'Full-time': 'full_time',
-    'Depends on the match': 'depends'
-  };
-  return mapping[availability] || availability;
-}
-
-function mapFlexibilityValue(flexibility) {
-  const mapping = {
-    'Very rigid': 'rigid',
-    'Slightly flexible': 'slightly_flexible',
-    'Very flexible': 'very_flexible'
-  };
-  return mapping[flexibility] || flexibility;
-}
-
-function mapChronotypeValue(chronotype) {
-  const mapping = {
-    'Early morning (5am—10am)': 'morning',
-    'Midday (11am—4pm)': 'midday',
-    'Evening/Night (5pm—2am)': 'night',
-    'Flexible throughout the day': 'flexible'
-  };
-  return mapping[chronotype] || chronotype;
-}
-
-function mapCommunicationValue(communication) {
-  const mapping = {
-    'Async-first': 'async',
-    'Weekly syncs/check-ins': 'weekly_sync',
-    'Daily check-ins and active messaging': 'daily_checkin',
-    'Depends on the team': 'depends'
-  };
-  return mapping[communication] || communication;
-}
-
-function mapConflictStyleValue(conflictStyle) {
-  const mapping = {
-    'I prefer to address it directly and resolve it quickly.': 'direct',
-    'I bring it up gently, usually after thinking it through.': 'indirect',
-    'I try to avoid confrontation and hope it resolves.': 'avoidant',
-    'I usually internalize it unless it becomes urgent.': 'internalize'
-  };
-  return mapping[conflictStyle] || conflictStyle;
-}
 function App() {
   const [authState, setAuthState] = useState('welcome') // 'welcome', 'login', 'signup', 'onboarding', 'dashboard'
   const [user, setUser] = useState(null)
@@ -209,7 +112,6 @@ function App() {
   // 4. Remove redundant checkUser() calls (now only runs on mount)
   // 5. Always respect authState if already correct (guarded in checkUser and new useEffect)
 
-  
   const handleLogin = async (userData) => {
     console.log('Login successful:', userData) // Debug log
     setUser(userData)
@@ -238,15 +140,23 @@ function App() {
     if (user && user.id) {
       // Existing user: update profile
       setLoading(true);
-      const { error } = await updateUserProfile(user.id, formData);
+      
+      // Map the onboarding form data to database fields
+      const mappedData = mapOnboardingDataToProfile(formData);
+      console.log('App.jsx: mapped data:', mappedData);
+      
+      const { error } = await updateUserProfile(user.id, mappedData);
       console.log('App.jsx: updateUserProfile finished, error:', error);
+      
       // Always fetch the latest profile from Supabase after update
       const { profile: updatedProfile, error: fetchError } = await getUserProfile(user.id);
       console.log('App.jsx: getUserProfile after update, updatedProfile:', updatedProfile, 'fetchError:', fetchError);
+      
       if (!error && updatedProfile) {
         setUserProfile(updatedProfile);
         console.log('App.jsx: setUserProfile called with', updatedProfile);
         setAuthState('dashboard');
+        persistUserSession(user, updatedProfile);
       } else {
         alert('Error updating profile: ' + (error?.message || fetchError || JSON.stringify(error)));
       }
@@ -274,16 +184,20 @@ function App() {
         return
       }
       if (user) {
+        // Map onboarding data to database format
+        const mappedOnboardingData = mapOnboardingDataToProfile(onboardingData);
+        
         // Combine onboarding and signup data
         const profileData = {
           id: user.id,
           name: signupData.name,
           email: signupData.email,
           phone: signupData.phone,
-          ...onboardingData,
+          ...mappedOnboardingData,
           updated_at: new Date().toISOString(),
           created_at: new Date().toISOString()
         }
+        
         // Save to Supabase profiles table
         const { error: profileError } = await updateUserProfile(user.id, profileData)
         if (profileError) {
@@ -292,8 +206,8 @@ function App() {
         }
         setUser(user)
         setUserProfile(profileData)
-    setAuthState('dashboard')
-    persistUserSession(user, profileData)
+        setAuthState('dashboard')
+        persistUserSession(user, profileData)
       }
     } catch (err) {
       alert(err.message)
@@ -427,7 +341,7 @@ function App() {
                     <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#D1FAE5"/><path d="M18 36V20a2 2 0 012-2h16a2 2 0 012 2v16" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="22" y="24" width="12" height="8" rx="2" fill="#34D399"/></svg>
                   </div>
                   <h3 className="text-xl font-semibold mb-2">1. Fill your profile</h3>
-                  <p className="text-gray-600">Tell us about your skills, vision, and what you’re looking for in a cofounder.</p>
+                  <p className="text-gray-600">Tell us about your skills, vision, and what you're looking for in a cofounder.</p>
                 </div>
                 {/* Step 2 */}
                 <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
@@ -476,7 +390,7 @@ function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Placeholder testimonial cards */}
                 <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col justify-between hover:shadow-xl transition-shadow duration-200">
-                  <p className="text-gray-700 text-lg mb-4">“Sprout helped me find a cofounder who truly shares my vision. We launched our MVP in 3 months!”</p>
+                  <p className="text-gray-700 text-lg mb-4">"Sprout helped me find a cofounder who truly shares my vision. We launched our MVP in 3 months!"</p>
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">A</div>
                     <div>
@@ -486,7 +400,7 @@ function App() {
                   </div>
                 </div>
                 <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col justify-between hover:shadow-xl transition-shadow duration-200">
-                  <p className="text-gray-700 text-lg mb-4">“The matching process was seamless and the quality of connections is top-notch.”</p>
+                  <p className="text-gray-700 text-lg mb-4">"The matching process was seamless and the quality of connections is top-notch."</p>
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">S</div>
                     <div>
