@@ -135,39 +135,46 @@ function App() {
     }
   }
 
-  const handleOnboardingComplete = async (formData) => {
-    console.log('App.jsx: handleOnboardingComplete called with', formData, 'user:', user);
-    if (user && user.id) {
-      // Existing user: update profile
-      setLoading(true);
-      
-      // Map the onboarding form data to database fields
-      const mappedData = mapOnboardingDataToProfile(formData);
-      console.log('App.jsx: mapped data:', mappedData);
-      
-      const { error } = await updateUserProfile(user.id, mappedData);
-      console.log('App.jsx: updateUserProfile finished, error:', error);
-      
-      // Always fetch the latest profile from Supabase after update
-      const { profile: updatedProfile, error: fetchError } = await getUserProfile(user.id);
-      console.log('App.jsx: getUserProfile after update, updatedProfile:', updatedProfile, 'fetchError:', fetchError);
-      
-      if (!error && updatedProfile) {
-        setUserProfile(updatedProfile);
-        console.log('App.jsx: setUserProfile called with', updatedProfile);
-        setAuthState('dashboard');
-        persistUserSession(user, updatedProfile);
-      } else {
-        alert('Error updating profile: ' + (error?.message || fetchError || JSON.stringify(error)));
-      }
-      setLoading(false);
-    } else {
-      // New user onboarding (signup flow)
-      setOnboardingData(formData);
-      setAuthState('signup');
-    }
-  };
+  // In your main App component where you handle the final onboarding data
 
+const handleOnboardingComplete = async (onboardingData) => {
+  try {
+    // Step 1: Sign up the user (assuming you've collected email/password elsewhere)
+    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      email: onboardingData.email, // You'll need to add email/password to your form state
+      password: onboardingData.password,
+    });
+
+    if (signUpError) throw signUpError;
+
+    if (authData.user) {
+      // Step 2: Update the technical profile with the collected form data
+      // The trigger on the server should have already created a row with this ID.
+      const { error: updateError } = await supabase
+        .from('technical_profiles')
+        .update({
+          // Exclude auth details from the profile data
+          age: onboardingData.age,
+          location: onboardingData.location,
+          scaling_experience: onboardingData.scaling_experience,
+          technical_debt_decision: onboardingData.technical_debt_decision,
+          // ... include all other fields from onboardingData
+          cofounder_partnership: onboardingData.cofounder_partnership
+        })
+        .eq('id', authData.user.id); // Match the row for the newly created user
+
+      if (updateError) throw updateError;
+
+      // Onboarding and profile creation successful!
+      // Navigate the user to their dashboard or next page.
+      console.log('Successfully signed up and created technical profile!');
+    }
+
+  } catch (error) {
+    console.error('Error during signup or profile creation:', error.message);
+  }
+};
+  
   const handleSignup = async (signupData) => {
     // signupData: { name, email, phone, password }
     // onboardingData: from previous step
@@ -314,129 +321,244 @@ function App() {
       {redirect}
       <Routes>
         <Route path="/" element={
-          <div className="min-h-screen flex flex-col bg-white font-sans">
+          <div className="min-h-screen bg-white font-sans">
             {/* Hero Section */}
-            <section className="relative flex flex-col items-center justify-center text-center px-4 pt-24 pb-32 bg-white overflow-hidden">
-              <h1 className="relative z-10 text-4xl md:text-6xl font-extrabold text-gray-900 mb-6 leading-tight">
-                Build with someone who actually <span className="text-green-600">gets it.</span>
-              </h1>
-              <p className="relative z-10 text-lg md:text-2xl text-gray-700 mb-8 max-w-2xl mx-auto">
-                Sprout matches you with a cofounder who shares your vision and complements your skills. No more random DMs — just real, meaningful connections.
-              </p>
-              <button
-                className="relative z-10 px-8 py-4 rounded-xl bg-white text-green-600 font-bold text-lg shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-200 border border-green-500 hover:bg-green-50"
-                onClick={switchToOnboarding}
-              >
-                Find Your Cofounder
-              </button>
-            </section>
-
-            {/* How it Works Section */}
-            <section className="max-w-5xl mx-auto py-20 px-4 bg-white">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">How it works</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                {/* Step 1 */}
-                <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
-                  <div className="mb-4">
-                    <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#D1FAE5"/><path d="M18 36V20a2 2 0 012-2h16a2 2 0 012 2v16" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><rect x="22" y="24" width="12" height="8" rx="2" fill="#34D399"/></svg>
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">1. Fill your profile</h3>
-                  <p className="text-gray-600">Tell us about your skills, vision, and what you're looking for in a cofounder.</p>
-                </div>
-                {/* Step 2 */}
-                <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
-                  <div className="mb-4">
-                    <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#BBF7D0"/><path d="M18 28h20M28 18v20" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">2. We match you</h3>
-                  <p className="text-gray-600">Our algorithm finds the best fit based on your goals and working style.</p>
-                </div>
-                {/* Step 3 */}
-                <div className="flex flex-col items-center text-center p-6 bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-200">
-                  <div className="mb-4">
-                    <svg width="56" height="56" fill="none" viewBox="0 0 56 56"><circle cx="28" cy="28" r="28" fill="#6EE7B7"/><path d="M20 32l8-8 8 8" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </div>
-                  <h3 className="text-xl font-semibold mb-2">3. You connect</h3>
-                  <p className="text-gray-600">Start a conversation and build something great together.</p>
-                </div>
-              </div>
-            </section>
-
-            {/* Why Sprout Section */}
-            <section className="max-w-6xl mx-auto py-20 px-4 bg-white">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">Why Sprout?</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
-                  <svg width="40" height="40" fill="none" viewBox="0 0 40 40" className="mb-4"><circle cx="20" cy="20" r="20" fill="#D1FAE5"/><path d="M13 27l7-7 7 7" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <h3 className="text-lg font-semibold mb-2">Aligned vision</h3>
-                  <p className="text-gray-600 text-center">We match you with founders who share your goals and values.</p>
-                </div>
-                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
-                  <svg width="40" height="40" fill="none" viewBox="0 0 40 40" className="mb-4"><circle cx="20" cy="20" r="20" fill="#BBF7D0"/><path d="M20 13v14M13 20h14" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <h3 className="text-lg font-semibold mb-2">Complementary skills</h3>
-                  <p className="text-gray-600 text-center">Find partners who bring new strengths to your team.</p>
-                </div>
-                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col items-center hover:shadow-xl transition-shadow duration-200 border-t-4 border-green-400">
-                  <svg width="40" height="40" fill="none" viewBox="0 0 40 40" className="mb-4"><circle cx="20" cy="20" r="20" fill="#6EE7B7"/><path d="M15 25l5-5 5 5" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  <h3 className="text-lg font-semibold mb-2">No random DMs</h3>
-                  <p className="text-gray-600 text-center">Connect only with serious, vetted founders — no spam.</p>
-                </div>
-              </div>
-            </section>
-
-            {/* Stats / Social Proof Section */}
-            <section className="max-w-4xl mx-auto py-20 px-4">
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 text-center mb-12">What founders are saying</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Placeholder testimonial cards */}
-                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col justify-between hover:shadow-xl transition-shadow duration-200">
-                  <p className="text-gray-700 text-lg mb-4">"Sprout helped me find a cofounder who truly shares my vision. We launched our MVP in 3 months!"</p>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">A</div>
-                    <div>
-                      <div className="font-semibold text-gray-900">Alex P.</div>
-                      <div className="text-gray-500 text-sm">Founder, Seedly</div>
+            <section className="bg-gradient-to-br from-green-50 via-white to-green-50 py-20">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="grid lg:grid-cols-2 gap-12 items-center">
+                  <div className="space-y-8">
+                    <h1 className="text-5xl lg:text-6xl font-light text-gray-900 leading-tight">
+                      Connect with your
+                      <span className="block font-semibold text-green-600">ideal co-founder</span>
+                    </h1>
+                    <p className="text-xl text-gray-600 leading-relaxed max-w-lg">
+                      Join thousands of entrepreneurs building meaningful partnerships. 
+                      Sprout's intelligent matching connects you with co-founders who share your vision and complement your expertise.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <button
+                        onClick={switchToOnboarding}
+                        className="bg-green-600 text-white px-8 py-4 rounded-lg font-semibold text-lg hover:bg-green-700 transition-colors shadow-lg"
+                      >
+                        Get started for free
+                      </button>
+                      <button 
+                        onClick={switchToLogin}
+                        className="border border-gray-300 text-gray-700 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Sign in
+                      </button>
+                    </div>
+                    <div className="flex items-center space-x-6 text-sm text-gray-500">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>2,500+ active founders</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span>850+ successful matches</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="bg-white rounded-2xl shadow-md p-8 flex flex-col justify-between hover:shadow-xl transition-shadow duration-200">
-                  <p className="text-gray-700 text-lg mb-4">"The matching process was seamless and the quality of connections is top-notch."</p>
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center font-bold text-green-700">S</div>
-                    <div>
-                      <div className="font-semibold text-gray-900">Samantha R.</div>
-                      <div className="text-gray-500 text-sm">Co-founder, Launchly</div>
+              </div>
+            </section>
+
+            {/* Social Proof */}
+            <section className="bg-gray-50 py-16">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-12">
+                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
+                    Trusted by founders from
+                  </h2>
+                  <div className="flex justify-center items-center space-x-12 opacity-60">
+                    <div className="text-2xl font-bold text-gray-400">Y Combinator</div>
+                    <div className="text-2xl font-bold text-gray-400">Techstars</div>
+                    <div className="text-2xl font-bold text-gray-400">500 Startups</div>
+                    <div className="text-2xl font-bold text-gray-400">Entrepreneur First</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* How it Works */}
+            <section className="py-20 bg-white">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-16">
+                  <h2 className="text-4xl font-light text-gray-900 mb-4">How Sprout works</h2>
+                  <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                    Our proven process connects you with the right co-founder in three simple steps
+                  </p>
+                </div>
+                
+                <div className="grid md:grid-cols-3 gap-12">
+                  <div className="text-center group">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-green-200 transition-colors">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4">Create your profile</h3>
+                    <p className="text-gray-600 leading-relaxed">
+                      Share your background, skills, and what you're looking for in a co-founder. Our detailed questionnaire ensures quality matches.
+                    </p>
+                  </div>
+                  
+                  <div className="text-center group">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-green-200 transition-colors">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4">Get matched</h3>
+                    <p className="text-gray-600 leading-relaxed">
+                      Our algorithm analyzes compatibility across skills, vision, working style, and goals to find your ideal co-founder matches.
+                    </p>
+                  </div>
+                  
+                  <div className="text-center group">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-green-200 transition-colors">
+                      <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 mb-4">Start building</h3>
+                    <p className="text-gray-600 leading-relaxed">
+                      Connect through our platform, schedule calls, and begin building your startup together with confidence.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Testimonials */}
+            <section className="py-20 bg-gray-50">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="text-center mb-16">
+                  <h2 className="text-4xl font-light text-gray-900 mb-4">Success stories</h2>
+                  <p className="text-xl text-gray-600">Hear from founders who found their perfect match</p>
+                </div>
+                
+                <div className="grid lg:grid-cols-2 gap-12">
+                  <div className="bg-white rounded-xl p-8 shadow-sm">
+                    <div className="mb-6">
+                      <svg className="w-8 h-8 text-green-600 mb-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
+                      </svg>
+                      <p className="text-lg text-gray-700 leading-relaxed mb-6">
+                        "Finding my co-founder through Sprout was a game-changer. The matching algorithm really understood what I was looking for, and now we're building an incredible company together."
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-green-600 font-semibold">M</span>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900">Maria Rodriguez</div>
+                        <div className="text-gray-500">Co-founder, FinanceFlow</div>
+                        <div className="text-sm text-gray-400">Raised $2M Series A</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl p-8 shadow-sm">
+                    <div className="mb-6">
+                      <svg className="w-8 h-8 text-green-600 mb-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
+                      </svg>
+                      <p className="text-lg text-gray-700 leading-relaxed mb-6">
+                        "The quality of matches on Sprout is exceptional. Within two weeks, I connected with someone who perfectly complemented my technical skills with their business expertise."
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-green-600 font-semibold">D</span>
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900">David Kim</div>
+                        <div className="text-gray-500">Co-founder, GreenTech Solutions</div>
+                        <div className="text-sm text-gray-400">Y Combinator W23</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                {/* Add more testimonials or stats as needed */}
               </div>
             </section>
-            {/* Footer with login button and sitemap/social links */}
-            <footer className="w-full flex flex-col items-center justify-center py-12 mt-12 bg-white border-t border-gray-100">
-              <button
-                className="px-8 py-4 rounded-xl bg-white border border-green-600 text-green-700 font-bold text-lg shadow transition-all duration-200 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-300 mb-8"
-                onClick={switchToLogin}
-              >
-                I already have an account
-              </button>
-              <div className="w-full flex flex-col md:flex-row justify-between items-center max-w-5xl mx-auto px-4 mb-8 gap-8">
-                <div className="flex flex-col items-center md:items-start">
-                  <span className="text-green-600 font-bold text-lg mb-2">SITEMAP</span>
-                  <a href="#about" className="text-green-700 hover:underline mb-1">About</a>
-                  <a href="#contact" className="text-green-700 hover:underline mb-1">Contact</a>
-                  <a href="#privacy" className="text-green-700 hover:underline">Privacy</a>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span className="text-green-600 font-bold text-lg mb-2">FOLLOW</span>
-                  <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline mb-1">Instagram</a>
-                  <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline mb-1">LinkedIn</a>
-                  <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-green-700 hover:underline">Twitter</a>
-                </div>
+
+            {/* CTA Section */}
+            <section className="py-20 bg-green-600">
+              <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
+                <h2 className="text-4xl font-light text-white mb-6">
+                  Ready to find your co-founder?
+                </h2>
+                <p className="text-xl text-green-100 mb-8 max-w-2xl mx-auto">
+                  Join thousands of entrepreneurs who've found their perfect business partner through Sprout.
+                </p>
+                <button
+                  onClick={switchToOnboarding}
+                  className="bg-white text-green-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-50 transition-colors shadow-lg"
+                >
+                  Get started today
+                </button>
+                <p className="text-sm text-green-200 mt-4">Free to join • No credit card required</p>
               </div>
-              <div className="flex flex-col items-center mt-4">
-                <span className="text-5xl font-extrabold text-green-600 mb-2 tracking-tight drop-shadow-lg" style={{letterSpacing: '-0.03em'}}>SPROUT</span>
-                <span className="text-gray-400 text-sm">© 2025 Sprout. All rights reserved.</span>
+            </section>
+
+            {/* Footer */}
+            <footer className="bg-gray-900 text-white py-16">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="grid md:grid-cols-4 gap-8 mb-12">
+                  <div>
+                    <div className="flex items-center space-x-2 mb-4">
+                      <div className="w-8 h-8 bg-green-600 rounded flex items-center justify-center">
+                        <span className="text-white font-bold">S</span>
+                      </div>
+                      <span className="text-2xl font-bold">Sprout</span>
+                    </div>
+                    <p className="text-gray-400 leading-relaxed">
+                      Connecting entrepreneurs with their ideal co-founders through intelligent matching.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-semibold mb-4">Product</h4>
+                    <ul className="space-y-2 text-gray-400">
+                      <li><a href="#" className="hover:text-white transition-colors">How it works</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Pricing</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Success stories</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">FAQ</a></li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-semibold mb-4">Company</h4>
+                    <ul className="space-y-2 text-gray-400">
+                      <li><a href="#" className="hover:text-white transition-colors">About us</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Careers</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Blog</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
+                    </ul>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-semibold mb-4">Connect</h4>
+                    <ul className="space-y-2 text-gray-400">
+                      <li><a href="#" className="hover:text-white transition-colors">LinkedIn</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Twitter</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Instagram</a></li>
+                      <li><a href="#" className="hover:text-white transition-colors">Newsletter</a></li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+                  <p className="text-gray-400 text-sm">© 2025 Sprout. All rights reserved.</p>
+                  <div className="flex space-x-6 text-sm text-gray-400 mt-4 md:mt-0">
+                    <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
+                    <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+                    <a href="#" className="hover:text-white transition-colors">Cookie Policy</a>
+                  </div>
+                </div>
               </div>
             </footer>
           </div>
