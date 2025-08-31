@@ -135,46 +135,39 @@ function App() {
     }
   }
 
-  // In your main App component where you handle the final onboarding data
-
-const handleOnboardingComplete = async (onboardingData) => {
-  try {
-    // Step 1: Sign up the user (assuming you've collected email/password elsewhere)
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
-      email: onboardingData.email, // You'll need to add email/password to your form state
-      password: onboardingData.password,
-    });
-
-    if (signUpError) throw signUpError;
-
-    if (authData.user) {
-      // Step 2: Update the technical profile with the collected form data
-      // The trigger on the server should have already created a row with this ID.
-      const { error: updateError } = await supabase
-        .from('technical_profiles')
-        .update({
-          // Exclude auth details from the profile data
-          age: onboardingData.age,
-          location: onboardingData.location,
-          scaling_experience: onboardingData.scaling_experience,
-          technical_debt_decision: onboardingData.technical_debt_decision,
-          // ... include all other fields from onboardingData
-          cofounder_partnership: onboardingData.cofounder_partnership
-        })
-        .eq('id', authData.user.id); // Match the row for the newly created user
-
-      if (updateError) throw updateError;
-
-      // Onboarding and profile creation successful!
-      // Navigate the user to their dashboard or next page.
-      console.log('Successfully signed up and created technical profile!');
+  const handleOnboardingComplete = async (formData) => {
+    console.log('App.jsx: handleOnboardingComplete called with', formData, 'user:', user);
+    if (user && user.id) {
+      // Existing user: update profile
+      setLoading(true);
+      
+      // Map the onboarding form data to database fields
+      const mappedData = mapOnboardingDataToProfile(formData);
+      console.log('App.jsx: mapped data:', mappedData);
+      
+      const { error } = await updateUserProfile(user.id, mappedData);
+      console.log('App.jsx: updateUserProfile finished, error:', error);
+      
+      // Always fetch the latest profile from Supabase after update
+      const { profile: updatedProfile, error: fetchError } = await getUserProfile(user.id);
+      console.log('App.jsx: getUserProfile after update, updatedProfile:', updatedProfile, 'fetchError:', fetchError);
+      
+      if (!error && updatedProfile) {
+        setUserProfile(updatedProfile);
+        console.log('App.jsx: setUserProfile called with', updatedProfile);
+        setAuthState('dashboard');
+        persistUserSession(user, updatedProfile);
+      } else {
+        alert('Error updating profile: ' + (error?.message || fetchError || JSON.stringify(error)));
+      }
+      setLoading(false);
+    } else {
+      // New user onboarding (signup flow)
+      setOnboardingData(formData);
+      setAuthState('signup');
     }
+  };
 
-  } catch (error) {
-    console.error('Error during signup or profile creation:', error.message);
-  }
-};
-  
   const handleSignup = async (signupData) => {
     // signupData: { name, email, phone, password }
     // onboardingData: from previous step
@@ -357,6 +350,43 @@ const handleOnboardingComplete = async (onboardingData) => {
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                         <span>850+ successful matches</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Hero Image/Illustration */}
+                  <div className="relative lg:block hidden">
+                    <div className="bg-gradient-to-br from-green-100 to-green-200 rounded-2xl p-8 h-96">
+                      <div className="grid grid-cols-2 gap-4 h-full">
+                        <div className="space-y-3">
+                          <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                <span className="text-green-600 font-semibold">A</span>
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900">Alex Chen</div>
+                                <div className="text-sm text-gray-500">Tech Lead</div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-600">Looking for: Business co-founder</div>
+                          </div>
+                          <div className="bg-white rounded-lg p-4 shadow-sm">
+                            <div className="flex items-center space-x-3 mb-3">
+                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                                <span className="text-green-600 font-semibold">S</span>
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900">Sarah Kim</div>
+                                <div className="text-sm text-gray-500">Marketing Director</div>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-600">Looking for: Technical co-founder</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-center">
+                          <div className="text-4xl">🤝</div>
+                        </div>
                       </div>
                     </div>
                   </div>
