@@ -353,43 +353,6 @@ function App() {
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Hero Image/Illustration */}
-                  <div className="relative lg:block hidden">
-                    <div className="bg-gradient-to-br from-green-100 to-green-200 rounded-2xl p-8 h-96">
-                      <div className="grid grid-cols-2 gap-4 h-full">
-                        <div className="space-y-3">
-                          <div className="bg-white rounded-lg p-4 shadow-sm">
-                            <div className="flex items-center space-x-3 mb-3">
-                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                <span className="text-green-600 font-semibold">A</span>
-                              </div>
-                              <div>
-                                <div className="font-semibold text-gray-900">Alex Chen</div>
-                                <div className="text-sm text-gray-500">Tech Lead</div>
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-600">Looking for: Business co-founder</div>
-                          </div>
-                          <div className="bg-white rounded-lg p-4 shadow-sm">
-                            <div className="flex items-center space-x-3 mb-3">
-                              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                                <span className="text-green-600 font-semibold">S</span>
-                              </div>
-                              <div>
-                                <div className="font-semibold text-gray-900">Sarah Kim</div>
-                                <div className="text-sm text-gray-500">Marketing Director</div>
-                              </div>
-                            </div>
-                            <div className="text-xs text-gray-600">Looking for: Technical co-founder</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-center">
-                          <div className="text-4xl">🤝</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </section>
