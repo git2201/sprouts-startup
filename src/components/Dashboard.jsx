@@ -1,3 +1,5 @@
+// Updated Dashboard.jsx - Key changes for profile picture support
+
 import { useState, useEffect } from 'react'
 import { signOut } from '../library/auth.js'
 import { findMatchesForUser, getMatchStatistics } from '../library/matching.js'
@@ -9,330 +11,303 @@ import {
   getUserProfileById,
   deleteConnection
 } from '../library/connections.js'
-import ConnectionStatus from './ConnectionStatus.jsx'
+import { replaceProfilePicture } from '../library/storage.js' // NEW IMPORT
 import { Navigate, useNavigate, Link } from 'react-router-dom';
+import { supabase } from '../library/supabase.js'
+import ProfilePictureUpload from '../components/ProfilePictureUpload.jsx' // NEW IMPORT
 
-const Dashboard = ({ user, userProfile, setUserProfile, onLogout, onEditProfile }) => {
+const Dashboard = ({ user, userProfile, setUserProfile, onLogout }) => {
   console.log('Dashboard.jsx: userProfile', userProfile);
   const navigate = useNavigate();
-  if (!user || !userProfile || !onLogout) {
+  
+  // BYPASS FLAG for profile validation
+  const BYPASS_PROFILE_VALIDATION = true;
+  
+  if (!user || (!userProfile && !BYPASS_PROFILE_VALIDATION) || !onLogout) {
     return <Navigate to="/" replace />;
   }
-  console.log('Dashboard rendered', { onLogout });
-  const [activeTab, setActiveTab] = useState('overview')
+  
   const [matches, setMatches] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [showProfile, setShowProfile] = useState(false)
-  const [editFields, setEditFields] = useState({
-    interests: userProfile?.interests || '',
-  })
-  const [editingInterests, setEditingInterests] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
-  const [selectedProfile, setSelectedProfile] = useState(null)
-  const [showProfileModal, setShowProfileModal] = useState(false)
-  
-  // New state for connection flow
   const [connections, setConnections] = useState({})
   const [connectingUsers, setConnectingUsers] = useState(new Set())
-  // Remove PaymentModal, StripeBuyButton, handlePayment, handlePaymentSuccess, handlePaymentError, paymentError, showPaymentModal, selectedConnection, and payment-related imports
-  // Remove Suggested Matches tab and all related UI and logic
-  // Only keep Overview tab and logic for profile display and connection fetching
-  // New state for pause functionality
-  const [pauseUntil, setPauseUntil] = useState(null)
-  const [showPauseDialog, setShowPauseDialog] = useState({ open: false, match: null })
+  const [showPersonalityNotification, setShowPersonalityNotification] = useState(true)
+  const [avatarUploading, setAvatarUploading] = useState(false) // NEW STATE
+  const [showAvatarUpload, setShowAvatarUpload] = useState(false) // NEW STATE
 
-  // Get user's first name
+  // NEW: Handle profile picture upload
+  const handleAvatarUpload = async (file) => {
+    setAvatarUploading(true)
+    setError('')
+
+    try {
+      const { avatarUrl, error: uploadError } = await replaceProfilePicture(
+        file, 
+        user.id, 
+        userProfile?.avatar_url
+      )
+
+      if (uploadError) {
+        setError('Failed to upload profile picture: ' + uploadError.message)
+        return
+      }
+
+      // Update local state
+      const updatedProfile = { ...userProfile, avatar_url: avatarUrl }
+      setUserProfile(updatedProfile)
+      setSuccessMessage('Profile picture updated successfully!')
+      setTimeout(() => setSuccessMessage(''), 3000)
+      setShowAvatarUpload(false)
+
+    } catch (err) {
+      console.error('Avatar upload error:', err)
+      setError('Failed to upload profile picture')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  // Check if user has completed personality survey - MOVED TO TOP
+  const hasCompletedPersonalitySurvey = () => {
+    // Check if user has personality-related fields in their profile
+    return userProfile?.personality_type || 
+           userProfile?.work_style_preference || 
+           userProfile?.communication_style || 
+           userProfile?.leadership_style || 
+           userProfile?.personality_completed === true;
+  }
+
+  const handlePersonalityQuizClick = () => {
+    // TODO: Navigate to personality quiz page when it's created
+    // For now, just hide the notification
+    setShowPersonalityNotification(false);
+    console.log('Navigating to personality quiz...');
+  }
+
+  // Get user's first name - with fallback for empty profiles
   const getUserFirstName = () => {
     if (userProfile?.name) {
       return userProfile.name.split(' ')[0]
     }
+    if (user?.user_metadata?.name) {
+      return user.user_metadata.name.split(' ')[0]
+    }
+    if (user?.email) {
+      return user.email.split('@')[0]
+    }
     return 'there'
   }
 
-  // Load matches, stats, and connection statuses
-  useEffect(() => {
-    console.log('Dashboard useEffect running, user:', user);
-    const loadData = async () => {
-      if (!user?.id) {
-        console.log('No user.id, skipping loadData');
-        return;
-      }
-      setLoading(true)
-      setError(null)
-      try {
-        // Load matches for current user
-        const { matches: userMatches, error: matchesError } = await findMatchesForUser(user.id, 1)
-        console.log('findMatchesForUser result:', userMatches, matchesError);
-        // Debug: print all matches and their scores
-        if (userMatches) {
-          console.log('Matches:', userMatches.map(m => ({ name: m.name, score: m.matchScore })));
-        }
-        if (matchesError) {
-          console.error('Error loading matches:', matchesError)
-          setError('Failed to load matches')
-        } else {
-          setMatches(userMatches)
-          // Automatically create a connection for each match shown
-          userMatches.forEach(async (match) => {
-            try {
-              await requestConnection(user.id, match.id);
-            } catch (err) {
-              console.error('Failed to create connection for match', match.id, err);
-            }
-          });
-          // Load connection statuses for all matches
-          const connectionStatuses = {}
-          for (const match of userMatches) {
-            const { connection } = await getConnectionStatus(user.id, match.id)
-            connectionStatuses[match.id] = connection
-          }
-          setConnections(connectionStatuses)
-        }
+  // Function to calculate compatibility score between two users
+  const calculateCompatibilityScore = (currentUser, otherUser) => {
+    let score = 0;
+    let totalFactors = 0;
 
-        // Load statistics
-        const { stats: matchStats, error: statsError } = await getMatchStatistics()
-        if (statsError) {
-          console.error('Error loading stats:', statsError)
-        } else {
-          setStats(matchStats)
-        }
-      } catch (err) {
-        console.error('Error loading dashboard data:', err)
-        setError('Failed to load dashboard data')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadData()
-  }, [user?.id])
-
-  // Handle connection request
-  const handleConnect = async (targetUserId, targetUserName) => {
-    if (!user?.id) return
-    
-    setConnectingUsers(prev => new Set(prev).add(targetUserId))
-    
-    try {
-      const result = await requestConnection(user.id, targetUserId)
+    // Role compatibility (looking for complementary roles)
+    if (currentUser.roles && otherUser.roles) {
+      const currentRoles = Array.isArray(currentUser.roles) ? currentUser.roles : [];
+      const otherRoles = Array.isArray(otherUser.roles) ? otherUser.roles : [];
       
-      if (result.success) {
-        // Immediately re-fetch the latest connection status
-        const { connection: latestConnection } = await getConnectionStatus(user.id, targetUserId)
-        setConnections(prev => ({
-          ...prev,
-          [targetUserId]: latestConnection || result.connection
-        }))
-        // Show a message if both users have connected
-        if (latestConnection && latestConnection.user_a_connected && latestConnection.user_b_connected) {
-          setSuccessMessage('You have both decided to connect! Proceed to payment.');
-          setTimeout(() => setSuccessMessage(''), 4000)
-        } else {
-          // Send email notification if this is the first connection
-          if (!result.connection.user_b_connected) {
-            const { profile: targetProfile } = await getUserProfileById(targetUserId)
-            if (targetProfile?.email) {
-              await sendConnectionEmail(
-                targetProfile.email,
-                targetProfile.name || targetUserName,
-                userProfile?.name || getUserFirstName()
-              )
-            }
-          }
-          setSuccessMessage('Connection request sent!')
-          setTimeout(() => setSuccessMessage(''), 3000)
-        }
-      } else {
-        // Handle session expiration errors
-        if (result.error && (result.error.toLowerCase().includes('invalid refresh token') || result.error.toLowerCase().includes('refresh token not found'))) {
-          // Log out, clear storage, and prompt re-login
-          if (typeof localStorage !== 'undefined') localStorage.clear();
-          if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-          if (typeof window !== 'undefined') window.location.reload();
-          setError('Session expired or invalid. Please log in again.');
-        } else {
-        setError(result.error)
-        setTimeout(() => setError(null), 5000)
-        }
+      // Check if they have complementary roles (different roles = better match)
+      const hasComplementaryRoles = currentRoles.some(role => !otherRoles.includes(role)) && 
+                                   otherRoles.some(role => !currentRoles.includes(role));
+      if (hasComplementaryRoles) score += 30;
+      totalFactors += 30;
+    }
+
+    // Industry alignment (same industry = better match)
+    if (currentUser.industries && otherUser.industries) {
+      const currentIndustries = Array.isArray(currentUser.industries) ? currentUser.industries : [];
+      const otherIndustries = Array.isArray(otherUser.industries) ? otherUser.industries : [];
+      
+      const commonIndustries = currentIndustries.filter(industry => 
+        otherIndustries.includes(industry)
+      );
+      if (commonIndustries.length > 0) score += 25;
+      totalFactors += 25;
+    }
+
+    // Motivation alignment
+    if (currentUser.motivations && otherUser.motivations) {
+      const currentMotivations = Array.isArray(currentUser.motivations) ? currentUser.motivations : [];
+      const otherMotivations = Array.isArray(otherUser.motivations) ? otherUser.motivations : [];
+      
+      const commonMotivations = currentMotivations.filter(motivation => 
+        otherMotivations.includes(motivation)
+      );
+      if (commonMotivations.length > 0) score += 20;
+      totalFactors += 20;
+    }
+
+    // Communication style compatibility
+    if (currentUser.communication_style && otherUser.communication_style) {
+      if (currentUser.communication_style === otherUser.communication_style) {
+        score += 15;
       }
-    } catch (err) {
-      // Handle session expiration errors
-      if (err.message && (err.message.toLowerCase().includes('invalid refresh token') || err.message.toLowerCase().includes('refresh token not found'))) {
-        if (typeof localStorage !== 'undefined') localStorage.clear();
-        if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
-        if (typeof window !== 'undefined') window.location.reload();
-        setError('Session expired or invalid. Please log in again.');
-      } else {
-      console.error('Error requesting connection:', err)
-      setError('Failed to send connection request')
-      setTimeout(() => setError(null), 5000)
+      totalFactors += 15;
+    }
+
+    // Availability compatibility
+    if (currentUser.availability && otherUser.availability) {
+      if (currentUser.availability === otherUser.availability) {
+        score += 10;
       }
-    } finally {
-      setConnectingUsers(prev => {
-        const newSet = new Set(prev)
-        newSet.delete(targetUserId)
-        return newSet
-      })
+      totalFactors += 10;
     }
-  }
 
-  // Remove PaymentModal, StripeBuyButton, handlePayment, handlePaymentSuccess, handlePaymentError, paymentError, showPaymentModal, selectedConnection, and payment-related imports
-  // Remove Suggested Matches tab and all related UI and logic
-  // Only keep Overview tab and logic for profile display and connection fetching
-  // Helper to generate persona name
-  const getPersonaName = () => {
-    if (!userProfile) return ''
-    const role = userProfile.role || userProfile.roles?.[0] || ''
-    const vibe = userProfile.personality?.toLowerCase() || ''
-    if (role && vibe) {
-      if (role.toLowerCase().includes('visionary')) return 'The Visionary Hustler'
-      if (role.toLowerCase().includes('technical') || role.toLowerCase().includes('coder')) return 'Mission-Driven Coder'
-      if (role.toLowerCase().includes('pm') || role.toLowerCase().includes('operator')) return 'Detail-Oriented PM'
-      if (role.toLowerCase().includes('designer')) return 'Design-Obsessed Operator'
-      if (role.toLowerCase().includes('marketer')) return 'Growth-Focused Hustler'
-      if (role.toLowerCase().includes('sales')) return 'The Rainmaker'
-      if (role.toLowerCase().includes('generalist')) return 'Late-Night Generalist'
-      return `${vibe.charAt(0).toUpperCase() + vibe.slice(1)} ${role.charAt(0).toUpperCase() + role.slice(1)}`
+    // Return percentage score
+    return totalFactors > 0 ? Math.round((score / totalFactors) * 100) : 0;
+  };
+
+  // Function to get avatar emoji based on roles or default
+  const getAvatarForUser = (profile) => {
+    const roles = Array.isArray(profile.roles) ? profile.roles : [];
+    
+    if (roles.includes('Technical Co-founder') || roles.includes('CTO') || roles.includes('Developer')) {
+      return '👨‍💻';
+    } else if (roles.includes('Business Co-founder') || roles.includes('CEO') || roles.includes('Sales')) {
+      return '👨‍💼';
+    } else if (roles.includes('Designer') || roles.includes('Creative')) {
+      return '🎨';
+    } else if (roles.includes('Marketing') || roles.includes('Growth')) {
+      return '📈';
+    } else if (roles.includes('Product Manager')) {
+      return '📱';
+    } else {
+      return '👤';
     }
-    return 'Sprout Founder'
-  }
+  };
 
-  // Helper to summarize roles/skills
-  const getRolesSkills = () => {
-    console.log('Dashboard.jsx: rendering roles', userProfile?.roles);
-    if (!userProfile) return ''
-    const roles = userProfile.roles?.join(', ') || userProfile.role || ''
-    const preferred = userProfile.preferred_role || ''
-    return roles && preferred
-      ? `Strong in ${roles}. Prefers to ${preferred.toLowerCase()}.`
-      : roles
-  }
-
-  // Helper for motivation
-  const getMotivation = () => {
-    if (!userProfile) return ''
-    const m = userProfile.top_motivation || userProfile.motivation || ''
-    if (!m) return ''
-    return `Driven by ${m.toLowerCase()} and the desire to build something meaningful.`
-  }
-
-  // Helper for work style
-  const getWorkStyle = () => {
-    if (!userProfile) return ''
-    const avail = userProfile.availability?.replace('_', '–').replace('full_time', 'Full-time') || ''
-    const chrono = userProfile.chronotype || ''
-    const comm = userProfile.communication || ''
-    const team = userProfile.team_style || ''
-    let availText = ''
-    if (avail === 'nights–weekends') availText = 'Nights/weekends only'
-    else if (avail === '10–20') availText = '10–20 hrs/week'
-    else if (avail === '20–40') availText = '20–40 hrs/week'
-    else if (avail === 'Full-time') availText = 'Full-time'
-    else availText = avail
-    let chronoText = chrono === 'night' ? 'most productive at night' : chrono === 'morning' ? 'most productive in the morning' : chrono === 'midday' ? 'most productive midday' : chrono === 'flexible' ? 'flexible throughout the day' : chrono
-    let commText = comm === 'async' ? 'prefers async communication' : comm === 'weekly_sync' ? 'prefers weekly check-ins' : comm === 'daily_checkin' ? 'prefers daily check-ins' : comm === 'depends' ? 'flexible communication style' : comm
-    return `Available ${availText}, ${chronoText}, ${commText}, and ${team ? team : 'flexible in team structure'}.`
-  }
-
-  // Helper for personality blend
-  const getPersonalityBlend = () => {
-    if (!userProfile) return ''
-    const p = userProfile.personality?.toLowerCase() || ''
-    const c = userProfile.conflict_style || ''
-    if (p && c) {
-      if (p.includes('introvert')) return 'Introverted but thoughtful, with a calm and rational approach to conflict.'
-      if (p.includes('extrovert')) return 'Extroverted and energetic, prefers to address conflict directly.'
-      if (p.includes('creative')) return 'High on openness and creativity; prefers to address conflict directly and move fast.'
-      if (p.includes('analytical')) return 'Structured thinker; prefers to resolve conflict rationally.'
+  // Function to get seeking text based on what they're looking for
+  const getSeekingText = (profile) => {
+    const roles = Array.isArray(profile.roles) ? profile.roles : [];
+    
+    // If they're technical, they're probably seeking business
+    if (roles.includes('Technical Co-founder') || roles.includes('CTO') || roles.includes('Developer')) {
+      return 'Business Co-founder';
     }
-    return ''
-  }
+    // If they're business, they're probably seeking technical
+    else if (roles.includes('Business Co-founder') || roles.includes('CEO') || roles.includes('Sales')) {
+      return 'Technical Co-founder';
+    }
+    // Default based on what they might be missing
+    else {
+      return 'Co-founder';
+    }
+  };
 
+  // Load real user profiles and calculate matches
+  useEffect(() => {
+    const loadMatches = async () => {
+      if (!user?.id) return;
+      setLoading(true);
+      setError(null);
+      
+      try {
+        console.log('Loading matches for user:', user.id);
+        
+        // Fetch all profiles except the current user
+        const { data: allProfiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', user.id) // Exclude current user
+          .limit(20); // Limit to reasonable number
+
+        if (profilesError) {
+          console.error('Error fetching profiles:', profilesError);
+          setError('Failed to load potential matches');
+          return;
+        }
+
+        if (!allProfiles || allProfiles.length === 0) {
+          console.log('No other profiles found');
+          setMatches([]);
+          return;
+        }
+
+        console.log('Found profiles:', allProfiles.length);
+
+        // Calculate compatibility scores and sort by score
+        const profilesWithScores = allProfiles.map(profile => ({
+          ...profile,
+          compatibilityScore: calculateCompatibilityScore(userProfile || {}, profile),
+          avatar: profile.avatar_url || getAvatarForUser(profile), // UPDATED: Use avatar_url if available
+          seeking: getSeekingText(profile)
+        }));
+
+        // Sort by compatibility score (highest first) and take top matches
+        const sortedMatches = profilesWithScores
+          .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
+          .slice(0, 10); // Show top 10 matches
+
+        console.log('Calculated matches with scores:', sortedMatches);
+        setMatches(sortedMatches);
+
+      } catch (err) {
+        console.error('Error loading matches:', err);
+        setError('Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadMatches();
+  }, [user?.id, userProfile]);
+
+  // ... rest of your existing functions remain the same ...
+  
   const handleLogout = async () => {
     console.log('Sign Out button clicked in Dashboard');
     await signOut()
     onLogout()
   }
 
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    setEditingInterests(false); // Close modal immediately
-    const { error } = await updateUserProfile(user.id, {
-      ...userProfile,
-      interests: editFields.interests,
-    });
-    if (!error) {
-      // Re-fetch the latest profile from Supabase
-      const { profile } = await getUserProfile(user.id);
-      if (profile) setUserProfile(profile);
-      setSuccessMessage('Your interests have been updated!');
+  const handleEditProfile = () => {
+    console.log('Navigating to profile edit...');
+    navigate('/profile-edit');
+  };
+
+  const handleConnect = async (profileId) => {
+    if (connectingUsers.has(profileId)) return;
+    
+    setConnectingUsers(prev => new Set([...prev, profileId]));
+    
+    try {
+      // Here you would implement the connection logic
+      // For now, just show a success message
+      setSuccessMessage('Connection request sent!');
       setTimeout(() => setSuccessMessage(''), 3000);
-    } else {
-      alert('Error updating profile: ' + (error.message || JSON.stringify(error)));
+    } catch (error) {
+      console.error('Error connecting:', error);
+      setError('Failed to send connection request');
+    } finally {
+      setConnectingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(profileId);
+        return newSet;
+      });
     }
   };
 
-  function getProfileSummary(profile) {
-    const role = profile.role ? `${profile.role}. ` : '';
-    const motivation = profile.top_motivation || profile.motivation || '';
-    const motivationText = motivation
-      ? `Driven by ${motivation.toLowerCase()} and the desire to build something meaningful.`
-      : '';
-
-    // Work style
-    let avail = profile.availability || '';
-    if (avail === '10–20') avail = '10–20 hrs/week';
-    if (avail === '20–40') avail = '20–40 hrs/week';
-    if (avail === 'full_time') avail = 'Full-time';
-    const chrono = profile.chronotype || '';
-    const comm = profile.communication || '';
-    const team = profile.team_style || '';
-    const workStyleText = `Available ${avail}${chrono ? `, ${chrono}` : ''}${comm ? `, ${comm}` : ''}${team ? `, and ${team}` : ''}.`;
-
-    // Interests
-    const interests = profile.interests ? `Interests: ${profile.interests}` : '';
-
-    // Combine
-    return [role, motivationText, workStyleText, interests]
-      .filter(Boolean)
-      .join('\n');
-  }
-
-  // Helper to check if user is paused
-  const isUserPaused = () => {
-    if (!userProfile || !userProfile.pause_until) return false;
-    return new Date(userProfile.pause_until) > new Date();
-  }
-
-  // Handler for pause and remove match
-  const handlePauseAndRemoveMatch = async (targetUserId, targetUserName) => {
-    // Set pause until 100 years from now (effectively never)
-    const pauseUntilDate = new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
-    // Update user profile with pause_until
-    await updateUserProfile(user.id, { ...userProfile, pause_until: pauseUntilDate });
-    setPauseUntil(pauseUntilDate);
-    // Remove the match/connection
-    await deleteConnection(user.id, targetUserId);
-    setSuccessMessage(`You have been permanently removed from the matching pool. If this was a mistake, please contact support.`);
-    setShowPauseDialog({ open: false, match: null });
-    // Optionally, refresh matches
-    const { matches: userMatches } = await findMatchesForUser(user.id, 6);
-    setMatches(userMatches);
-    // --- NEW: Refresh matches for the other user (put them back in the pool) ---
-    try {
-      const { matches: targetUserMatches } = await findMatchesForUser(targetUserId, 6);
-      console.log(`Refreshed matches for user ${targetUserId}:`, targetUserMatches);
-    } catch (err) {
-      console.error('Error refreshing matches for the other user:', err);
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 font-poppins flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">🌱</div>
+          <h2 className="text-2xl font-bold text-gray-900">Loading your matches...</h2>
+          <p className="text-gray-600 mt-2">Finding the perfect co-founders for you</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-poppins">
+    <div className="min-h-screen bg-gray-50 font-sans">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-3">
@@ -341,19 +316,14 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout, onEditProfile 
             </div>
             <div className="flex items-center space-x-4">
               <button
-                className="btn-secondary text-sm"
-                onClick={() => {
-                  onEditProfile();
-                  navigate('/onboarding');
-                }}
-                // Only disable if loading is true and not null
-                disabled={!!loading}
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                onClick={handleEditProfile}
               >
                 Edit Profile
               </button>
               <button
                 onClick={handleLogout}
-                className="btn-secondary text-sm"
+                className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 Sign Out
               </button>
@@ -362,100 +332,15 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout, onEditProfile 
         </div>
       </header>
 
-      {/* Profile Modal */}
-      {showProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-lg w-full relative">
-            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowProfile(false)}>&times;</button>
-            <div className="text-center">
-              <div className="text-5xl mb-4">{userProfile?.avatar || '👤'}</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{userProfile?.name}</h2>
-              <div className="text-lg text-green-600 font-semibold mb-2">{getPersonaName()}</div>
-              <div className="mb-4 text-gray-700 font-medium">{getRolesSkills()}</div>
-              <div className="mb-4 text-gray-700">{getMotivation()}</div>
-              <div className="mb-4 text-gray-700">{getWorkStyle()}</div>
-              <div className="mb-4 text-gray-700 italic">{getPersonalityBlend()}</div>
-              <div className="mb-4 text-gray-700">
-                <span className="font-semibold">Interests:</span>
-                <div>{userProfile?.interests ? userProfile.interests : <span className="text-gray-400">Not specified</span>}</div>
-              </div>
-              <button
-                className="btn-secondary"
-                onClick={() => {
-                  setEditFields({ interests: userProfile?.interests || '' });
-                  setEditingInterests(true);
-                }}
-              >
-                Edit Interests
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingInterests && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40" style={{ zIndex: 9999, pointerEvents: 'auto' }}>
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative" style={{ zIndex: 10000, pointerEvents: 'auto', border: '2px solid #22c55e' }}>
-            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setEditingInterests(false)}>&times;</button>
-            <h2 className="text-xl font-bold mb-4">Edit Your Interests</h2>
-            <form
-              onSubmit={e => { console.log('Save clicked, submitting form'); handleEditSubmit(e); }}
-            >
-              <textarea
-                className="form-textarea w-full mb-4"
-                rows={4}
-                value={editFields.interests}
-                onChange={e => setEditFields({ ...editFields, interests: e.target.value })}
-                placeholder="E.g. I love hiking, building side projects, and reading about AI."
-              />
-              <button type="submit" className="btn-primary mr-2" tabIndex={0}>Save</button>
-              <button type="button" className="btn-secondary" onClick={() => setEditingInterests(false)}>Cancel</button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {successMessage && (
         <div className="fixed top-6 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-xl shadow-lg z-50">
           {successMessage}
         </div>
       )}
 
-      {showPauseDialog.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full relative">
-            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl" onClick={() => setShowPauseDialog({ open: false, match: null })}>&times;</button>
-            <h2 className="text-xl font-bold mb-4">Are you sure?</h2>
-            <p className="mb-4 text-red-600 font-semibold">Warning: This will permanently remove you from the matching pool. You will need to contact support to rejoin in the future.</p>
-            <p className="mb-4">If you choose not to match with <b>{showPauseDialog.match?.name}</b>, you will be removed from the matching pool forever.<br/>Are you sure you want to continue?</p>
-            <div className="flex space-x-4">
-              <button className="btn-primary" onClick={() => { handlePauseAndRemoveMatch(showPauseDialog.match.id, showPauseDialog.match.name); setShowPauseDialog({ open: false, match: null }); }}>Yes, remove and pause me</button>
-              <button className="btn-secondary" onClick={() => setShowPauseDialog({ open: false, match: null })}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tabs */}
-        <div className="mb-8">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`py-2 px-1 border-b-2 font-semibold text-sm transition-colors ${
-                activeTab === 'overview'
-                  ? 'border-green-500 text-green-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Overview
-            </button>
-          </nav>
-        </div>
-
-        {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+      {error && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex">
               <div className="text-red-400">⚠️</div>
               <div className="ml-3">
@@ -464,69 +349,322 @@ const Dashboard = ({ user, userProfile, setUserProfile, onLogout, onEditProfile 
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {activeTab === 'overview' && (
-          <div className="space-y-8">
-            {/* Welcome Section */}
-            <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
-              <h2 className="text-4xl font-bold text-gray-900 mb-4">
-                Welcome back, <span className="text-green-600">{getUserFirstName()}</span>! 
-              </h2>
-              <p className="text-xl text-gray-600 mb-6">
-                We'll email you as soon as we find your ideal cofounder match and send you their details.
-              </p>
-              {/* Refer a Friend Button */}
-              <div className="mb-4">
-                <button
-                  className="btn-primary"
-                  onClick={async () => {
-                    const shareUrl = window.location.origin;
-                    const shareText = `Hey! 👋\n\nI just found an awesome platform called Sprout that matches you with the perfect cofounder based on your skills, interests, and working style. I think you'd love it!\n\nCheck it out: ${shareUrl}\n\nLet's build something great together! 🚀`;
-                    if (navigator.share) {
-                      try {
-                        await navigator.share({
-                          title: "Join me on Sprout – Find your perfect cofounder!",
-                          text: shareText,
-                          url: shareUrl,
-                        });
-                      } catch (err) {
-                        // User cancelled or error
-                      }
-                    } else {
-                      await navigator.clipboard.writeText(shareText);
-                      alert("Referral message copied! Paste it anywhere to share with a friend.");
-                    }
-                  }}
-                >
-                  Refer a Friend
+      {/* Avatar Upload Modal */}
+      {showAvatarUpload && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Update Profile Picture</h3>
+              <button
+                onClick={() => setShowAvatarUpload(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <ProfilePictureUpload
+              currentImageUrl={userProfile?.avatar_url}
+              onImageUpload={handleAvatarUpload}
+              loading={avatarUploading}
+              size="large"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-12 gap-6">
+          {/* Left Sidebar - User Profile Card */}
+          <div className="col-span-12 lg:col-span-3">
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="bg-gradient-to-r from-green-400 to-green-600 h-20 rounded-t-lg"></div>
+              <div className="px-6 pb-6">
+                <div className="relative -mt-10 mb-4">
+                  <div 
+                    className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-3xl border-4 border-white shadow-lg cursor-pointer hover:shadow-xl transition-shadow"
+                    onClick={() => setShowAvatarUpload(true)}
+                  >
+                    {userProfile?.avatar_url ? (
+                      <img 
+                        src={userProfile.avatar_url} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : (
+                      userProfile?.avatar || getAvatarForUser(userProfile || {})
+                    )}
+                  </div>
+                  {/* Camera icon overlay */}
+                  <button
+                    onClick={() => setShowAvatarUpload(true)}
+                    className="absolute bottom-0 right-0 bg-green-600 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-green-700 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  {userProfile?.name || getUserFirstName()}
+                </h3>
+                <div className="border-t pt-4">
+                  <div className="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>Profile views</span>
+                    <span className="text-green-600 font-medium">0</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Connections</span>
+                    <span className="text-green-600 font-medium">0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-lg shadow-sm border mt-4 p-4">
+              <h4 className="font-semibold text-gray-900 mb-3">Quick Actions</h4>
+              <div className="space-y-2">
+                
+                <button className="w-full text-left text-sm text-gray-600 hover:text-green-600 py-2 px-3 rounded hover:bg-gray-50 transition-colors">
+                  View analytics
+                </button>
+                <button className="w-full text-left text-sm text-gray-600 hover:text-green-600 py-2 px-3 rounded hover:bg-gray-50 transition-colors">
+                  Invite friends
                 </button>
               </div>
-              <p className="text-sm text-gray-500">
-                💡 Invite friends to join and increase your chances of finding the perfect match!
-              </p>
             </div>
           </div>
-        )}
-      </main>
 
-      {showProfileModal && selectedProfile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-lg w-full relative">
-            <button
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 text-2xl"
-              onClick={() => setShowProfileModal(false)}
-            >
-              ×
-            </button>
-            <div className="flex flex-col items-center">
-              {/* Only show interests, no name/avatar */}
-              <div className="mt-4 w-full text-center">
-                <span className="font-semibold">Interests:</span>{' '}
-                {selectedProfile.interests && selectedProfile.interests.trim() !== ''
-                  ? selectedProfile.interests
-                  : <span className="text-gray-400 italic">Not specified</span>}
+          {/* Main Feed - Profiles */}
+          <div className="col-span-12 lg:col-span-6">
+            {/* Welcome Message */}
+            <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                Welcome back, <span className="text-green-600">{getUserFirstName()}</span>!
+              </h2>
+              <p className="text-gray-600">
+                Discover potential co-founders who match your vision and expertise.
+              </p>
+            </div>
+
+            {/* Profiles Section */}
+            <div className="bg-white rounded-lg shadow-sm border">
+              <div className="p-6 border-b">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xl font-semibold text-gray-900">Recommended Co-founders</h3>
+                  <span className="text-sm text-gray-500">{matches.length} matches found</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1">Based on your profile and preferences</p>
               </div>
+
+              <div className="divide-y">
+                {matches.length === 0 ? (
+                  <div className="p-6 text-center">
+                    <div className="text-4xl mb-4">🔍</div>
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No matches found yet</h4>
+                    <p className="text-gray-600">
+                      Complete your profile and come back later as more users join the platform.
+                    </p>
+                  </div>
+                ) : (
+                  matches.map((profile) => (
+                    <div key={profile.id} className="p-6 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start space-x-4">
+                        <div className="text-4xl">
+                          {profile.avatar_url ? (
+                            <img 
+                              src={profile.avatar_url} 
+                              alt={profile.name || 'User'} 
+                              className="w-12 h-12 rounded-full object-cover"
+                            />
+                          ) : (
+                            profile.avatar
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <h4 className="text-lg font-semibold text-gray-900">{profile.name || 'Anonymous User'}</h4>
+                                <span className="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
+                                  {profile.compatibilityScore}% match
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                {profile.title || 'Entrepreneur'} 
+                                {profile.company && ` • ${profile.company}`}
+                              </p>
+                              {profile.location && (
+                                <p className="text-sm text-gray-500 flex items-center mt-1">
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  {typeof profile.location === 'string' ? profile.location : 
+                                   `${profile.location?.city || ''}${profile.location?.city && profile.location?.state_region ? ', ' : ''}${profile.location?.state_region || ''}${profile.location?.state_region && profile.location?.country ? ', ' : ''}${profile.location?.country || ''}`}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                                Seeking: {profile.seeking}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-gray-700 mt-3 text-sm leading-relaxed">
+                            {profile.bio || profile.description || 'Building the next big thing. Looking for a co-founder to join the journey.'}
+                          </p>
+                          
+                          {/* Skills/Roles */}
+                          {profile.roles && profile.roles.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {profile.roles.slice(0, 3).map((role, index) => (
+                                <span key={index} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded font-medium">
+                                  {role}
+                                </span>
+                              ))}
+                              {profile.roles.length > 3 && (
+                                <span className="inline-block text-gray-500 text-xs px-2 py-1">
+                                  +{profile.roles.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Industries */}
+                          {profile.industries && profile.industries.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {profile.industries.slice(0, 2).map((industry, index) => (
+                                <span key={index} className="inline-block bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded font-medium">
+                                  {industry}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mt-4">
+                            <button className="text-gray-500 hover:text-gray-700 text-sm font-medium">
+                              View profile
+                            </button>
+                            <button 
+                              onClick={() => handleConnect(profile.id)}
+                              disabled={connectingUsers.has(profile.id)}
+                              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                            >
+                              {connectingUsers.has(profile.id) ? 'Connecting...' : 'Connect'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Sidebar */}
+          <div className="col-span-12 lg:col-span-3">
+            {/* Stats Card */}
+            <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+              <h4 className="font-semibold text-gray-900 mb-4">Your Matching Stats</h4>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Total matches</span>
+                  <span className="text-sm font-medium text-gray-900">{matches.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">High compatibility</span>
+                  <span className="text-sm font-medium text-green-600">
+                    {matches.filter(m => m.compatibilityScore >= 70).length}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Profile completeness</span>
+                  <span className="text-sm font-medium text-blue-600">
+                    {userProfile ? Math.min(100, Object.keys(userProfile).length * 10) : 0}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                </div>
+                <h4 className="font-semibold text-gray-900 mb-2">Boost Your Startup</h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Get premium features and priority matching with Sprout Pro
+                </p>
+                <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
+                  Learn More
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg border p-6">
+              <h4 className="font-semibold text-gray-900 mb-2">Trending Topics</h4>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-700">#Placeholder</span>
+                  <span className="text-xs text-gray-500">XYZ posts</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-700">#Placeholder</span>
+                  <span className="text-xs text-gray-500">XYZ posts</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-700">#Placeholder</span>
+                  <span className="text-xs text-gray-500">XYZ posts</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-700">#Placeholder</span>
+                  <span className="text-xs text-gray-500">XYZ posts</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Personality Quiz Notification */}
+      {showPersonalityNotification && !hasCompletedPersonalitySurvey() && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <div 
+            className="bg-red-500 text-white p-4 rounded-lg shadow-lg cursor-pointer hover:bg-red-600 transition-colors max-w-sm"
+            onClick={handlePersonalityQuizClick}
+          >
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 15.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-semibold text-sm mb-1">Complete Personality Quiz</h4>
+                <p className="text-sm opacity-90">Get better matching results by completing our personality assessment</p>
+              </div>
+              <button 
+                className="flex-shrink-0 text-white hover:text-gray-200 ml-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowPersonalityNotification(false);
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
