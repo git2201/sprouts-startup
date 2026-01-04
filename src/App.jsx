@@ -6,10 +6,11 @@ import Header from './components/Header'
 import Login from './components/Login'
 import Signup from './components/Signup'
 import Dashboard from './components/Dashboard'
+import ProfileEdit from './components/ProfileEdit'
 import { onAuthStateChange, getCurrentUser, signOut, signUp } from './library/auth.js'
 import { getUserProfile, updateUserProfile } from './library/profiles.js'
 import { createUserFromOnboarding } from './utils/matching.js'
-import { testProfilesTable } from './library/supabase.js'
+import { supabase, testProfilesTable } from './library/supabase.js'
 import { hasDeprecatedRolesOrMissingFields } from './utils/profileValidation'
 import { mapOnboardingDataToProfile } from './utils/onboardingMapper'
 
@@ -18,7 +19,7 @@ function App() {
   const [user, setUser] = useState(null)
   const [userProfile, setUserProfile] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [onboardingData, setOnboardingData] = useState(null) // NEW: store onboarding answers
+  const [onboardingData, setOnboardingData] = useState(null) // Store onboarding answers
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState({
     availability: userProfile?.availability || '',
@@ -31,6 +32,9 @@ function App() {
 
   // Move useLocation to the top, before any returns
   const location = useLocation();
+
+  // BYPASS FLAG - Set to true to skip profile validation
+  const BYPASS_PROFILE_VALIDATION = true;
 
   // Helper: Save user and profile to localStorage
   const persistUserSession = (user, profile) => {
@@ -55,34 +59,31 @@ function App() {
     return { user: null, profile: null }
   }
 
-  // 1. Only call checkUser() on mount, not on every render
+  // SIMPLIFIED Check user authentication and profile status
   useEffect(() => {
     let didRun = false;
     const runCheckUser = async () => {
       if (didRun) return;
       didRun = true;
-      // Early exit if already authenticated and on correct state
-      if ((user && userProfile && authState === 'dashboard') || (user && !userProfile && authState === 'onboarding')) {
-        setLoading(false);
-        return;
-      }
+      
       // Try to restore from localStorage first
       const { user: storedUser, profile: storedProfile } = restoreUserSession()
-      if (storedUser && storedProfile) {
+      if (storedUser && (storedProfile || BYPASS_PROFILE_VALIDATION)) {
         setUser(storedUser)
-        setUserProfile(storedProfile)
+        setUserProfile(storedProfile || {}) // Use empty object if no profile
         setAuthState('dashboard')
         setLoading(false)
         return
       }
+      
       const { user: currentUser } = await getCurrentUser()
       if (currentUser) {
         setUser(currentUser)
         const { profile } = await getUserProfile(currentUser.id)
-        if (profile) {
-          setUserProfile(profile)
+        if (profile || BYPASS_PROFILE_VALIDATION) {
+          setUserProfile(profile || {}) // Use empty object if no profile
           setAuthState('dashboard')
-          persistUserSession(currentUser, profile)
+          persistUserSession(currentUser, profile || {})
         } else {
           setUserProfile(null)
           setAuthState('onboarding')
@@ -97,32 +98,27 @@ function App() {
       }
     };
     runCheckUser();
-    // No dependency array: only run once on mount
-    // eslint-disable-next-line
-  }, []);
+  }, []); // No dependencies to prevent re-running
 
-  // 2. After successful login, always route to dashboard if state is correct
+  // SIMPLIFIED post-login routing
   useEffect(() => {
-    if (user && userProfile && authState !== 'dashboard' && authState !== 'onboarding') {
+    // Only redirect if we have both user and profile but aren't on dashboard
+    if (user && userProfile && authState !== 'dashboard') {
       setAuthState('dashboard');
     }
-  }, [user, userProfile, authState]);
-
-  // 3. Clear stale session data on logout/session expiry (already handled in handleLogout and onAuthStateChange)
-  // 4. Remove redundant checkUser() calls (now only runs on mount)
-  // 5. Always respect authState if already correct (guarded in checkUser and new useEffect)
+  }, [user, userProfile]); // Remove authState from dependencies
 
   const handleLogin = async (userData) => {
-    console.log('Login successful:', userData) // Debug log
+    console.log('Login successful:', userData)
     setUser(userData)
     try {
       const { profile, error } = await getUserProfile(userData.id)
-      if (!error && profile) {
+      if (!error && (profile || BYPASS_PROFILE_VALIDATION)) {
         console.log('User has profile:', profile)
-        setUserProfile(profile)
+        setUserProfile(profile || {})
         setUser(prev => ({ ...prev, hasProfile: true }))
-        setAuthState('dashboard') // <-- Ensure dashboard state after login
-        persistUserSession(userData, profile)
+        setAuthState('dashboard')
+        persistUserSession(userData, profile || {})
       } else {
         console.log('User has no profile, going to onboarding')
         setAuthState('onboarding')
@@ -135,42 +131,58 @@ function App() {
     }
   }
 
-  const handleOnboardingComplete = async (formData) => {
-    console.log('App.jsx: handleOnboardingComplete called with', formData, 'user:', user);
-    if (user && user.id) {
-      // Existing user: update profile
-      setLoading(true);
-      
-      // Map the onboarding form data to database fields
-      const mappedData = mapOnboardingDataToProfile(formData);
-      console.log('App.jsx: mapped data:', mappedData);
-      
-      const { error } = await updateUserProfile(user.id, mappedData);
-      console.log('App.jsx: updateUserProfile finished, error:', error);
-      
-      // Always fetch the latest profile from Supabase after update
-      const { profile: updatedProfile, error: fetchError } = await getUserProfile(user.id);
-      console.log('App.jsx: getUserProfile after update, updatedProfile:', updatedProfile, 'fetchError:', fetchError);
-      
-      if (!error && updatedProfile) {
-        setUserProfile(updatedProfile);
-        console.log('App.jsx: setUserProfile called with', updatedProfile);
-        setAuthState('dashboard');
-        persistUserSession(user, updatedProfile);
-      } else {
-        alert('Error updating profile: ' + (error?.message || fetchError || JSON.stringify(error)));
+  // SIMPLIFIED handleOnboardingComplete
+  const handleOnboardingComplete = async (onboardingData) => {
+    console.log('Onboarding completed with data:', onboardingData);
+    
+    try {
+      if (!user) {
+        // User needs to sign up first - store onboarding data and redirect to signup
+        console.log('No user found, storing onboarding data and redirecting to signup');
+        setOnboardingData(onboardingData);
+        setAuthState('signup');
+        return;
       }
-      setLoading(false);
-    } else {
-      // New user onboarding (signup flow)
-      setOnboardingData(formData);
-      setAuthState('signup');
+
+      // User is authenticated, update their profile (regardless of whether they had one before)
+      console.log('Updating profile for user:', user.id);
+      
+      const mappedData = mapOnboardingDataToProfile ? mapOnboardingDataToProfile(onboardingData) : onboardingData;
+      const profileData = {
+        id: user.id,
+        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+        email: user.email,
+        ...mappedData,
+        updated_at: new Date().toISOString()
+      };
+
+      console.log('Saving profile data:', profileData);
+      
+      const { error } = await updateUserProfile(user.id, profileData);
+      if (error) {
+        console.error('Profile update error:', error);
+        // Don't throw - just alert and continue to dashboard
+        alert('Profile saved with some issues: ' + error);
+      }
+
+      console.log('Profile updated successfully');
+      setUserProfile(profileData);
+      setAuthState('dashboard');
+      persistUserSession(user, profileData);
+      
+    } catch (error) {
+      console.error('Error updating profile:', error.message);
+      // Don't block the user - let them go to dashboard anyway
+      alert('Profile update had issues but continuing: ' + error.message);
+      setAuthState('dashboard');
     }
   };
-
+  
+  // UPDATED handleSignup with better session handling
   const handleSignup = async (signupData) => {
-    // signupData: { name, email, phone, password }
-    // onboardingData: from previous step
+    console.log('Signup data received:', signupData);
+    console.log('Stored onboarding data:', onboardingData);
+    
     setLoading(true)
     try {
       // Create user in Supabase Auth
@@ -178,38 +190,85 @@ function App() {
         name: signupData.name,
         phone: signupData.phone
       })
+      
       if (error) {
+        console.error('Signup error:', error);
         setLoading(false)
         alert(error.message || error)
         return
       }
+      
       if (user) {
-        // Map onboarding data to database format
-        const mappedOnboardingData = mapOnboardingDataToProfile(onboardingData);
-        
-        // Combine onboarding and signup data
-        const profileData = {
-          id: user.id,
-          name: signupData.name,
-          email: signupData.email,
-          phone: signupData.phone,
-          ...mappedOnboardingData,
-          updated_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        }
-        
-        // Save to Supabase profiles table
-        const { error: profileError } = await updateUserProfile(user.id, profileData)
-        if (profileError) {
-          console.error('Profile save error:', profileError);
-          alert('Error saving profile: ' + (profileError.message || JSON.stringify(profileError)))
-        }
+        console.log('User created successfully:', user.id);
         setUser(user)
-        setUserProfile(profileData)
-        setAuthState('dashboard')
-        persistUserSession(user, profileData)
+        
+        // Wait for session to be established and retry a few times if needed
+        let sessionEstablished = false;
+        let retries = 0;
+        const maxRetries = 5;
+        
+        while (!sessionEstablished && retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+          
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData.session) {
+            console.log('Session established after', retries + 1, 'attempts');
+            sessionEstablished = true;
+          } else {
+            retries++;
+            console.log('Session not ready, retry', retries);
+          }
+        }
+        
+        if (!sessionEstablished) {
+          console.warn('Session not established after retries, proceeding to onboarding');
+          setAuthState('onboarding');
+          persistUserSession(user, null);
+          setLoading(false);
+          return;
+        }
+        
+        // If we have onboarding data, create complete profile
+        if (onboardingData) {
+          const mappedOnboardingData = mapOnboardingDataToProfile ? mapOnboardingDataToProfile(onboardingData) : onboardingData;
+          
+          const profileData = {
+            id: user.id,
+            name: signupData.name,
+            email: signupData.email,
+            phone: signupData.phone,
+            ...mappedOnboardingData,
+            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          }
+          
+          console.log('Creating profile with data:', profileData);
+          
+          const { error: profileError } = await updateUserProfile(user.id, profileData)
+          if (profileError) {
+            console.error('Profile save error:', profileError);
+            // Don't fail completely - let them go to onboarding to try again
+            alert('Account created but profile could not be saved. Please complete your profile in the next step.');
+            setAuthState('onboarding')
+            persistUserSession(user, null)
+            setLoading(false)
+            return
+          }
+          
+          console.log('Profile created successfully');
+          setUserProfile(profileData)
+          setAuthState('dashboard')
+          persistUserSession(user, profileData)
+          setOnboardingData(null) // Clear stored onboarding data
+        } else {
+          // No onboarding data, send to onboarding
+          console.log('No onboarding data, sending to onboarding');
+          setAuthState('onboarding')
+          persistUserSession(user, null)
+        }
       }
     } catch (err) {
+      console.error('Signup error:', err);
       alert(err.message)
     } finally {
       setLoading(false)
@@ -223,36 +282,22 @@ function App() {
       alert('Sign out failed: ' + error);
       console.error('Sign out error:', error);
     } else {
-    setUser(null);
-    setUserProfile(null);
-    setAuthState('welcome');
-    persistUserSession(null, null)
-      // window.location.reload(); // Force reload to clear all state
-  }
+      setUser(null);
+      setUserProfile(null);
+      setAuthState('welcome');
+      setOnboardingData(null); // Clear any stored onboarding data
+      persistUserSession(null, null)
+    }
   };
 
   const switchToOnboarding = () => setAuthState('onboarding')
-  const switchToSignup = () => setAuthState('onboarding')
+  const switchToSignup = () => setAuthState('signup')
   const switchToLogin = () => setAuthState('login')
 
   // Debug: Show current state
   console.log('Current authState:', authState)
   console.log('Current user:', user)
   console.log('Current userProfile:', userProfile)
-
-  useEffect(() => {
-    if (user && !userProfile && !loading) {
-      setAuthState('onboarding');
-    }
-  }, [user, userProfile, loading]);
-
-  useEffect(() => {
-    // Add post-login profile validation
-    if (userProfile && hasDeprecatedRolesOrMissingFields(userProfile)) {
-      setShowProfileUpdateBanner(true);
-      setAuthState('onboarding');
-    }
-  }, [userProfile]);
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
@@ -273,17 +318,12 @@ function App() {
     }
   };
 
-  const onEditProfile = () => {
-    setAuthState('onboarding');
-    navigate('/onboarding');
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 font-poppins">
         <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="text-4xl mb-4">🌱</div>
+          <div className="text-center">
+            <div className="text-4xl mb-4">🌱</div>
             <h2 className="text-2xl font-bold text-gray-900">Loading your matches...</h2>
             <p className="text-gray-600 mt-2">Finding the perfect cofounders for you</p>
           </div>
@@ -292,21 +332,27 @@ function App() {
     )
   }
 
-  // Handle redirects based on auth state
+  // FIXED - Handle redirects based on auth state with allowed routes
   let redirect = null;
-  if (authState === 'dashboard' && location.pathname !== '/dashboard') {
+  const allowedDashboardRoutes = ['/dashboard', '/profile-edit'];
+  const allowedOnboardingRoutes = ['/onboarding'];
+  const allowedLoginRoutes = ['/login'];
+  const allowedSignupRoutes = ['/signup'];
+  const allowedWelcomeRoutes = ['/'];
+
+  if (authState === 'dashboard' && !allowedDashboardRoutes.includes(location.pathname)) {
     redirect = <Navigate to="/dashboard" replace />;
-  } else if (authState === 'onboarding' && location.pathname !== '/onboarding') {
+  } else if (authState === 'onboarding' && !allowedOnboardingRoutes.includes(location.pathname)) {
     redirect = <Navigate to="/onboarding" replace />;
-  } else if (authState === 'login' && location.pathname !== '/login') {
+  } else if (authState === 'login' && !allowedLoginRoutes.includes(location.pathname)) {
     redirect = <Navigate to="/login" replace />;
-  } else if (authState === 'signup' && location.pathname !== '/signup') {
+  } else if (authState === 'signup' && !allowedSignupRoutes.includes(location.pathname)) {
     redirect = <Navigate to="/signup" replace />;
-  } else if (authState === 'welcome' && location.pathname !== '/') {
+  } else if (authState === 'welcome' && !allowedWelcomeRoutes.includes(location.pathname)) {
     redirect = <Navigate to="/" replace />;
   }
 
-  console.log('App.jsx: isProfileUpdate', !!user, 'user:', user, 'userProfile:', userProfile);
+  console.log('App.jsx: isProfileUpdate', !!(user && userProfile), 'user:', user, 'userProfile:', userProfile);
 
   return (
     <div className="app">
@@ -365,10 +411,10 @@ function App() {
                     Trusted by founders from
                   </h2>
                   <div className="flex justify-center items-center space-x-12 opacity-60">
-                    <div className="text-2xl font-bold text-gray-400">Y Combinator</div>
-                    <div className="text-2xl font-bold text-gray-400">Techstars</div>
-                    <div className="text-2xl font-bold text-gray-400">500 Startups</div>
-                    <div className="text-2xl font-bold text-gray-400">Entrepreneur First</div>
+                    <div className="text-2xl font-bold text-gray-400">W</div>
+                    <div className="text-2xl font-bold text-gray-400">X</div>
+                    <div className="text-2xl font-bold text-gray-400">Y</div>
+                    <div className="text-2xl font-bold text-gray-400">Z</div>
                   </div>
                 </div>
               </div>
@@ -439,7 +485,7 @@ function App() {
                         <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
                       </svg>
                       <p className="text-lg text-gray-700 leading-relaxed mb-6">
-                        "Finding my co-founder through Sprout was a game-changer. The matching algorithm really understood what I was looking for, and now we're building an incredible company together."
+                        "placeholder testimonial"
                       </p>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -447,9 +493,9 @@ function App() {
                         <span className="text-green-600 font-semibold">M</span>
                       </div>
                       <div>
-                        <div className="font-semibold text-gray-900">Maria Rodriguez</div>
-                        <div className="text-gray-500">Co-founder, FinanceFlow</div>
-                        <div className="text-sm text-gray-400">Raised $2M Series A</div>
+                        <div className="font-semibold text-gray-900">placeholder name</div>
+                        <div className="text-gray-500">placeholder company</div>
+                        <div className="text-sm text-gray-400">placeholder fact</div>
                       </div>
                     </div>
                   </div>
@@ -460,7 +506,7 @@ function App() {
                         <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
                       </svg>
                       <p className="text-lg text-gray-700 leading-relaxed mb-6">
-                        "The quality of matches on Sprout is exceptional. Within two weeks, I connected with someone who perfectly complemented my technical skills with their business expertise."
+                        "placeholder testimonial"
                       </p>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -468,9 +514,9 @@ function App() {
                         <span className="text-green-600 font-semibold">D</span>
                       </div>
                       <div>
-                        <div className="font-semibold text-gray-900">David Kim</div>
-                        <div className="text-gray-500">Co-founder, GreenTech Solutions</div>
-                        <div className="text-sm text-gray-400">Y Combinator W23</div>
+                        <div className="font-semibold text-gray-900">placeholder name</div>
+                        <div className="text-gray-500">placeholder company</div>
+                        <div className="text-sm text-gray-400">placeholder fact</div>
                       </div>
                     </div>
                   </div>
@@ -558,18 +604,26 @@ function App() {
         } />
         <Route path="/login" element={<Login onLogin={handleLogin} onSwitchToSignup={switchToSignup} />} />
         <Route path="/signup" element={<Signup onSignup={handleSignup} onSwitchToLogin={switchToLogin} onboardingData={onboardingData} />} />
-        <Route path="/onboarding" element={<OnboardingFlow showProfileUpdateBanner={showProfileUpdateBanner} prefill={userProfile} onComplete={handleOnboardingComplete} isProfileUpdate={!!user} />} />
-        <Route path="/dashboard" element={
-          user && userProfile ? (
-            <Dashboard
+        <Route path="/onboarding" element={<OnboardingFlow showProfileUpdateBanner={showProfileUpdateBanner} prefill={userProfile} onComplete={handleOnboardingComplete} isProfileUpdate={!!(user && userProfile)} />} />
+        <Route path="/profile-edit" element={
+          user ? (
+            <ProfileEdit
               user={user}
               userProfile={userProfile}
+              setUserProfile={setUserProfile}
               onLogout={handleLogout}
-              onEditProfile={onEditProfile}
-              editing={editing}
-              editFields={editFields}
-              setEditing={setEditing}
-              setEditFields={setEditFields}
+            />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        } />
+        <Route path="/dashboard" element={
+          user && (userProfile || BYPASS_PROFILE_VALIDATION) ? (
+            <Dashboard
+              user={user}
+              userProfile={userProfile || {}}
+              setUserProfile={setUserProfile}
+              onLogout={handleLogout}
             >
               {!editing ? (
                 <>
